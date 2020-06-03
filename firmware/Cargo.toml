@@ -1,0 +1,14 @@
+[package]
+name = "touchtron-firmware"
+version = "0.1.0"
+authors = ["Kevin J. Lynagh <kevin@keminglabs.com>"]
+edition = "2018"
+
+[dependencies]
+cortex-m = "0.6"
+cortex-m-rt = "0.6"
+stm32f0xx-hal = { version = "0.16", features = ["rt", "stm32f072", "stm32-usbd"] }
+stm32-usbd = { version = "0.5", features = ["ram_access_2x16"] }
+panic-semihosting = "0.5"
+usb-device = "0.2"
+usbd-serial = "0.1"

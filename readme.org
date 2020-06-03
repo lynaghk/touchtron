@@ -1,0 +1,151 @@
+# Touchtron
+
+Misc. experiments with Rust + USB, Kevin making a touchpad.
+
+* MacOS Setup 
+
+#for stm32f0 (kevin custom board)
+cargo target install thumbv6m-none-eabi 
+
+#for stm32f1 (blue pill board)
+cargo target install thumbv7m-none-eabi
+
+
+pip install pyusb
+brew install libusb
+
+* misc research / notes
+https://jan.rychter.com/fingerworks-touchstream-kbd
+** lcsc stm32 parts with lots of channels
+| part          | adcs |     CHs | basic? | pins | cost | note                        |
+| STM32F303RCT6 |    4 | 22 real |        |   64 | 2.94 |                             |
+| STM32F103VBT6 |    2 |      16 | x      |  100 | 1.99 |                             |
+| STM32L073V8T6 |    1 |      16 |        |  100 | 1.96 | crystalless usb             |
+| STM32F407VGT6 |    3 |     ... |        |      | 4.33 | adcs share same 16 channels |
+| STM32L151C8T6 |    1 |      24 | x      |   48 | 1.85 |                             |
+| STM32L152RBT6 |    1 |      24 |        |   64 | 2.90 |                             |
+| STM32F030C8T6 |    1 |      16 | x      |   48 | 0.79 | no usb                      |
+| STM32G031C6T6 |    1 |      16 |        |   48 | 1.68 |                             |
+
+
+
+** Mac raw gesture data
+from https://ia801404.us.archive.org/15/items/2009-03-28-steike-code-macbook-multitouch/2009-03-28%20%28archived%202014-06-17%29%20-%20steike%20macbook%20multitouch.html
+via Vivek
+
+
+
+Here's code to read the raw gesture data from a MacBook trackpad.
+
+[Update: if you're on a MacBook with Java enabled, you can try the demo applet]
+
+If you use this to make something fun, please let me know and I'll post it here...
+
+Notes about the fields of the Finger struct:
+
+identifier
+    Persistent identifier for each touch -- each "finger" may move around the Fingers[] array, but this will remain the same. 
+normalized.pos.x
+    Current position, from [0..1] 
+size
+    Close to zero if you're barely touching the touch pad 
+angle, majorAxis, minorAxis
+    Describes the ellipsoid of your finger. Yes, you can track rotation of a single finger! 
+
+#include <math.h>
+#include <unistd.h>
+#include <CoreFoundation/CoreFoundation.h>
+
+typedef struct { float x,y; } mtPoint;
+typedef struct { mtPoint pos,vel; } mtReadout;
+
+typedef struct {
+  int frame;
+  double timestamp;
+  int identifier, state, foo3, foo4;
+  mtReadout normalized;
+  float size;
+  int zero1;
+  float angle, majorAxis, minorAxis; // ellipsoid
+  mtReadout mm;
+  int zero2[2];
+  float unk2;
+} Finger;
+
+typedef void *MTDeviceRef;
+typedef int (*MTContactCallbackFunction)(int,Finger*,int,double,int);
+
+MTDeviceRef MTDeviceCreateDefault();
+void MTRegisterContactFrameCallback(MTDeviceRef, MTContactCallbackFunction);
+void MTDeviceStart(MTDeviceRef, int); // thanks comex
+
+
+int callback(int device, Finger *data, int nFingers, double timestamp, int frame) {
+  for (int i=0; i<nFingers; i++) {
+    Finger *f = &data[i];
+    printf("Frame %7d: Angle %6.2f, ellipse %6.3f x%6.3f; "
+    	   "position (%6.3f,%6.3f) vel (%6.3f,%6.3f) "
+    	   "ID %d, state %d [%d %d?] size %6.3f, %6.3f?\n",
+	   f->frame,
+	   f->angle * 90 / atan2(1,0),
+	   f->majorAxis,
+	   f->minorAxis,
+	   f->normalized.pos.x,
+	   f->normalized.pos.y,
+	   f->normalized.vel.x,
+	   f->normalized.vel.y,
+	   f->identifier, f->state, f->foo3, f->foo4,
+	   f->size, f->unk2);
+  }
+  printf("\n");
+  return 0;
+}
+
+int main() {
+  MTDeviceRef dev = MTDeviceCreateDefault();
+  MTRegisterContactFrameCallback(dev, callback);
+  MTDeviceStart(dev, 0);
+  printf("Ctrl-C to abort\n");
+  sleep(-1);
+  return 0;
+}
+
+run: test
+	./test
+test: test.m
+	gcc -F/System/Library/PrivateFrameworks -framework MultitouchSupport $^ -o $@ -std=c99
+
+Comments
+Could you please explain how you go about compiling this code. I tried including the MultitouchSupport framework under PrivateFrameworks and I get "ld: framework not found MultitouchSupport"
+— Al 2009-05-27
+[Ah, I hadn't tried compiling it in Xcode. It appears to be silently prepending all paths with /Developer/SDKs/MacOS10.xxx/. You need to change the 'Base SDK' setting (under Project settings) from 'MacOS 10.whatever' to 'Current OS'.]
+Excelletn stuff. Al, the sendo text is a make file, just put it into 'Makefile' in the same dir and type make. I am wrapping the code in a Java Wrapper, but im only geting the MT debug init message, not any MT events. I guess its somethine todo with threading (e.g. main thread) and perhaps how the java binary is (or not) dynamically binding with the Framework(s). I'm really not sure asthis is my 1st trip into native MacOS system dev/integration... (but im well seasoned elsewhere :)
+— Wayne 2009-05-27
+Excellent! We just built an external for MaxMSP around your code. We'd like to release it under the GNU GPL 2.0, if that is fine by you? [binary / source]
+— Max & Michael 2009-06-02
+[Brilliant! Max/MSP looks awesome; I'll have to play with it as soon as I'm done moving.]
+Hi, Greetings from the maker of the multitouch Fingerworks NumPad Max/MSP external I salute you! The circle is now complete.
+— jusu 2009-06-08
+Great stuff! The only problem is that when I play with the gestures, I tend to trigger Expose. Any idea how to deactivate it (at least the three- and four-finger gestures that aren't really all that useful to begin with)?
+— Robert 2009-07-02
+[For testing purposes, I just used killall -STOP Dock. This also disables Cmd-Tab and other system hotkeys; killall -CONT Dock to bring it back.]
+Cool!
+
+btw, can I use the code inside my own project? I'm gonna release the project under GPL because I use another library that uses GPL. By doing so, it means, I also release your code under GPL.
+
+I make a TUIO wrapper over your code. So the multi-touch events from the touchpad will be forwarded as TUIO messages. These later can be used by any TUIO-enabled multi-touch application.
+— Anonymous 2009-08-08
+Very cool stuff! I build a TUIO wrapper around your code (http://github.com/fajran/tongseng/tree/master). In case you don't know, TUIO is a protocol that is usually used to create a multitouch application. More information here http://www.tuio.org/
+— Fajran 2009-08-15
+To get this to work on Snow Leopard/64-bit/in a more complicated program, I had to change MTDeviceRef to a long and add a second int argument to MTDeviceStart; otherwise, I would get crashes and/or no events.
+— comex 2009-08-30
+[I have updated the code. Thanks!]
+Perhaps I am too foolish or new to make this work, but on Snow Leopard 10.6.1 when I put the source in 'test.m' and have a Makefile it makes, but I get a segmentation fault when I run it. fprintf tells me that the fault happens during
+
+MTRegisterContactFrameCallback(dev, callback);
+
+I have also tried copying the MultitouchSupport.framework folder in to the folder I'm working in, and to no avail.
+
+Is this different in 10.6 then? Am I missing something?
+— Jonathan 2009-09-21
+[This was preemptively answered by comex, but his comment was stuck in the 
