@@ -5,10 +5,10 @@ Misc. experiments with Rust + USB, Kevin making a touchpad.
 * MacOS Setup 
 
 #for stm32f0 (kevin custom board)
-cargo target install thumbv6m-none-eabi 
+rustup target add thumbv6m-none-eabi 
 
 #for stm32f1 (blue pill board)
-cargo target install thumbv7m-none-eabi
+rustup target add thumbv7m-none-eabi
 
 
 pip install pyusb

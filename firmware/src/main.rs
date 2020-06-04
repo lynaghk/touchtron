@@ -25,9 +25,15 @@ fn main() -> ! {
         .pclk(24.mhz())
         .freeze(&mut dp.FLASH);
 
-    //let gpioc = dp.GPIOC.split(&mut rcc);
-    // let mut led = cortex_m::interrupt::free(|cs| gpioc.pc7.into_push_pull_output(cs));
-    // led.set_low(); // Turn off
+    let gpioc = dp.GPIOC.split(&mut rcc);
+    let (mut led_orange, mut led_green) = cortex_m::interrupt::free(|cs| {
+        (
+            gpioc.pc8.into_push_pull_output(cs),
+            gpioc.pc9.into_push_pull_output(cs),
+        )
+    });
+    led_orange.set_high().unwrap();
+    led_green.set_high().unwrap();
 
     let gpioa = dp.GPIOA.split(&mut rcc);
 
