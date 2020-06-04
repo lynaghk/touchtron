@@ -13,3 +13,7 @@ stm32-usbd = { version = "0.5", features = ["ram_access_1x16"] }
 panic-semihosting = "0.5"
 usb-device = "0.2"
 usbd-serial = "0.1"
+usbd-midi = "*"
+
+cortex-m-rtfm = "0.5"
+

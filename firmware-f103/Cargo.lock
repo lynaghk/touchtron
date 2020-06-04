@@ -21,6 +21,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "autocfg"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
+
+[[package]]
 name = "bare-metal"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -28,6 +34,12 @@ checksum = "5deb64efa5bd81e31fcd1938615a6d98c82eafcbcd787162b6f63b91d6bac5b3"
 dependencies = [
  "rustc_version",
 ]
+
+[[package]]
+name = "byteorder"
+version = "1.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
 name = "cast"
@@ -71,6 +83,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "cortex-m-rtfm"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaf0b9fd3f042cb3793d15daf3cea201b2f25c99b0b5b936a551bb6909c3ae5b"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "cortex-m-rtfm-macros",
+ "heapless",
+ "rtfm-core",
+]
+
+[[package]]
+name = "cortex-m-rtfm-macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c62092f6ff344e9b0adb748f0302ed69889ba2fae1fce446e3788d4726ea73bb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rtfm-syntax",
+ "syn",
+]
+
+[[package]]
 name = "cortex-m-semihosting"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -105,6 +142,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ed1e761351b56f54eb9dcd0cfaca9fd0daecf93918e1cfc01c8a3d26ee7adcd"
 dependencies = [
  "typenum",
+]
+
+[[package]]
+name = "hash32"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4041af86e63ac4298ce40e5cca669066e75b6f1aa3390fe2561ffa5e1d9f4cc"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
+name = "heapless"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73a8a2391a3bc70b31f60e7a90daa5755a360559c0b6b9c5cfc0fee482362dc0"
+dependencies = [
+ "as-slice",
+ "generic-array 0.13.2",
+ "hash32",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "indexmap"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c398b2b113b55809ceb9ee3e753fcbac793f1956663f3c36549c1346015c2afe"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]
@@ -146,6 +213,23 @@ name = "r0"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2a38df5b15c8d5c7e8654189744d8e396bddc18ad48041a500ce52d6948941f"
+
+[[package]]
+name = "rtfm-core"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ec893edb2aa5b70320b94896ffea22a7ebb1cf3f942bb67cd5b60a865a63493"
+
+[[package]]
+name = "rtfm-syntax"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4455e23c34df3d66454e7e218a4d76a7f83321d04a806be614463341cec4116e"
+dependencies = [
+ "indexmap",
+ "proc-macro2",
+ "syn",
+]
 
 [[package]]
 name = "rustc_version"
@@ -234,11 +318,13 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
+ "cortex-m-rtfm",
  "embedded-hal",
  "panic-semihosting",
  "stm32-usbd",
  "stm32f1xx-hal",
  "usb-device",
+ "usbd-midi",
  "usbd-serial",
 ]
 
@@ -259,6 +345,17 @@ name = "usb-device"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e5e2b9ba23f0d9ef7a34e498b6581c9d67944a1916542bfc7238bf1dc0d6acd"
+
+[[package]]
+name = "usbd-midi"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f3140ea7a0704683358e1665800667a264e06a5fcec506bf803d5d7d7e09f4c"
+dependencies = [
+ "embedded-hal",
+ "nb",
+ "usb-device",
+]
 
 [[package]]
 name = "usbd-serial"

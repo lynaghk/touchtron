@@ -14,6 +14,10 @@ rustup target add thumbv7m-none-eabi
 pip install pyusb
 brew install libusb
 
+MIDI stuff:
+virtual keyboard for generating events: https://flit.github.io/projects/midikeys/
+monitoring MIDI events on the system: https://www.snoize.com/MIDIMonitor/
+
 * misc research / notes
 https://jan.rychter.com/fingerworks-touchstream-kbd
 ** lcsc stm32 parts with lots of channels
