@@ -6,83 +6,101 @@
 
 extern crate panic_semihosting;
 
-use cortex_m_rt::entry;
 use stm32_usbd::UsbBus;
-use stm32f0xx_hal::{prelude::*, stm32, usb};
+use stm32f0xx_hal::stm32 as hw;
+use stm32f0xx_hal::{gpio, prelude::*, usb, usb::UsbBusType};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
-#[entry]
-fn main() -> ! {
-    let mut dp = stm32::Peripherals::take().unwrap();
+use rtfm::app;
 
-    let mut rcc = dp
-        .RCC
-        .configure()
-        .hsi48()
-        .enable_crs(dp.CRS)
-        .sysclk(48.mhz())
-        .pclk(24.mhz())
-        .freeze(&mut dp.FLASH);
-
-    let gpioc = dp.GPIOC.split(&mut rcc);
-    let (mut led_orange, mut led_green) = cortex_m::interrupt::free(|cs| {
-        (
-            gpioc.pc8.into_push_pull_output(cs),
-            gpioc.pc9.into_push_pull_output(cs),
-        )
-    });
-    led_orange.set_high().unwrap();
-    led_green.set_high().unwrap();
-
-    let gpioa = dp.GPIOA.split(&mut rcc);
-
-    let usb_bus = UsbBus::new(usb::Peripheral {
-        usb: dp.USB,
-        pin_dm: gpioa.pa11,
-        pin_dp: gpioa.pa12,
-    });
-
-    let mut serial = SerialPort::new(&usb_bus);
-
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
-        .manufacturer("Fake company")
-        .product("Serial port")
-        .serial_number("TEST")
-        .device_class(USB_CLASS_CDC)
-        .build();
-
-    loop {
-        if !usb_dev.poll(&mut [&mut serial]) {
-            continue;
-        }
-
-        let mut buf = [0u8; 64];
-
-        match serial.read(&mut buf) {
-            Ok(count) if count > 0 => {
-                //led.set_high(); // Turn on
-
-                // Echo back in upper case
-                for c in buf[0..count].iter_mut() {
-                    if 0x61 <= *c && *c <= 0x7a {
-                        *c &= !0x20;
-                    }
-                }
-
-                let mut write_offset = 0;
-                while write_offset < count {
-                    match serial.write(&buf[write_offset..count]) {
-                        Ok(len) if len > 0 => {
-                            write_offset += len;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        //led.set_low(); // Turn off
+#[app(device = hw)]
+const APP: () = {
+    struct Resources {
+        led: gpio::gpioc::PC8<gpio::Output<gpio::PushPull>>,
+        usb_device: UsbDevice<'static, UsbBusType>,
+        serial: SerialPort<'static, UsbBusType>,
     }
-}
+
+    #[init]
+    fn init(_cx: init::Context) -> init::LateResources {
+        let mut dp = hw::Peripherals::take().unwrap();
+
+        let mut rcc = dp
+            .RCC
+            .configure()
+            .hsi48()
+            .enable_crs(dp.CRS)
+            .sysclk(48.mhz())
+            .pclk(24.mhz())
+            .freeze(&mut dp.FLASH);
+
+        let gpioc = dp.GPIOC.split(&mut rcc);
+        let mut led = cortex_m::interrupt::free(|cs| gpioc.pc8.into_push_pull_output(cs));
+        led.set_high().unwrap();
+
+        let gpioa = dp.GPIOA.split(&mut rcc);
+
+        // SerialPort and UsbDevice take refs to usb_bus but outlive init()
+        // so usb_bus must be owned with static lifetime
+        // see https://github.com/Rahix/shared-bus/issues/4#issuecomment-503512441
+        static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBusType>> = None;
+
+        let usb_bus = unsafe {
+            USB_BUS = Some(UsbBus::new(usb::Peripheral {
+                usb: dp.USB,
+                pin_dm: gpioa.pa11,
+                pin_dp: gpioa.pa12,
+            }));
+            USB_BUS.as_ref().unwrap()
+        };
+
+        let serial = SerialPort::new(&usb_bus);
+
+        let usb_device = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
+            .manufacturer("Fake company")
+            .product("Serial port")
+            .serial_number("TEST")
+            .device_class(USB_CLASS_CDC)
+            .build();
+
+        init::LateResources {
+            led: led,
+            usb_device: usb_device,
+            serial: serial,
+        }
+    }
+
+    #[idle(resources = [led, usb_device, serial])]
+    fn idle(cx: idle::Context) -> ! {
+        loop {
+            if !cx.resources.usb_device.poll(&mut [cx.resources.serial]) {
+                continue;
+            }
+
+            let mut buf = [0u8; 64];
+
+            match cx.resources.serial.read(&mut buf) {
+                Ok(count) if count > 0 => {
+                    // Echo back in upper case
+                    for c in buf[0..count].iter_mut() {
+                        if 0x61 <= *c && *c <= 0x7a {
+                            *c &= !0x20;
+                        }
+                    }
+
+                    let mut write_offset = 0;
+                    while write_offset < count {
+                        match cx.resources.serial.write(&buf[write_offset..count]) {
+                            Ok(len) if len > 0 => {
+                                write_offset += len;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+};
