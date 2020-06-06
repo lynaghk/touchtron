@@ -20,6 +20,8 @@ monitoring MIDI events on the system: https://www.snoize.com/MIDIMonitor/
 
 * misc research / notes
 https://jan.rychter.com/fingerworks-touchstream-kbd
+
+clever in software debouncing: https://github.com/dbrgn/debouncr/
 ** lcsc stm32 parts with lots of channels
 | part          | adcs |     CHs | basic? | pins | cost | note                        |
 | STM32F303RCT6 |    4 | 22 real |        |   64 | 2.94 |                             |

@@ -2,11 +2,12 @@ use core::marker::PhantomData;
 use usb_device::class::UsbClass;
 use usb_device::class_prelude::*;
 
-pub struct Counter<'a, B>
+pub struct Reporter<'a, B, D>
 where
     B: UsbBus,
+    D: AsRef<[u8]>,
 {
-    idx: i64,
+    pub data: D,
     interface: InterfaceNumber,
     write_ep: EndpointIn<'a, B>,
     _marker: PhantomData<B>,
@@ -14,13 +15,14 @@ where
 
 const INTERVAL: u8 = 1; //Frame count.
 
-impl<B> Counter<'_, B>
+impl<B, D> Reporter<'_, B, D>
 where
     B: UsbBus,
+    D: AsRef<[u8]>,
 {
-    pub fn new(alloc: &UsbBusAllocator<B>, max_packet_size: u16) -> Counter<'_, B> {
-        Counter {
-            idx: 0,
+    pub fn new(alloc: &UsbBusAllocator<B>, max_packet_size: u16, data: D) -> Reporter<'_, B, D> {
+        Reporter {
+            data,
             interface: alloc.interface(),
             write_ep: alloc.interrupt(max_packet_size, INTERVAL),
             _marker: PhantomData,
@@ -28,9 +30,10 @@ where
     }
 }
 
-impl<B> UsbClass<B> for Counter<'_, B>
+impl<B, D> UsbClass<B> for Reporter<'_, B, D>
 where
     B: UsbBus,
+    D: AsRef<[u8]>,
 {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<(), UsbError> {
         let vendor_class = 0xff;
@@ -42,7 +45,6 @@ where
     }
 
     fn poll(&mut self) {
-        self.idx += 1;
-        self.write_ep.write(&self.idx.to_le_bytes()).ok();
+        self.write_ep.write(self.data.as_ref()).ok();
     }
 }

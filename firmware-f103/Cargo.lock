@@ -320,6 +320,7 @@ dependencies = [
  "cortex-m-rt",
  "cortex-m-rtfm",
  "embedded-hal",
+ "heapless",
  "panic-semihosting",
  "stm32-usbd",
  "stm32f1xx-hal",
