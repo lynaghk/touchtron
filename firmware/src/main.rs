@@ -18,57 +18,80 @@ use rtfm::app;
 const APP: () = {
     struct Resources {
         led: gpio::gpioc::PC8<gpio::Output<gpio::PushPull>>,
+        exti: hw::EXTI,
         usb_device: UsbDevice<'static, UsbBusType>,
         serial: SerialPort<'static, UsbBusType>,
     }
 
     #[init]
     fn init(_cx: init::Context) -> init::LateResources {
-        let mut dp = hw::Peripherals::take().unwrap();
+        // init() is already run with interrupts disabled,
+        // but we need a CriticalSection to pass to some stm32f0xx_hal methods
+        cortex_m::interrupt::free(move |cs| {
+            let mut dp = hw::Peripherals::take().unwrap();
 
-        let mut rcc = dp
-            .RCC
-            .configure()
-            .hsi48()
-            .enable_crs(dp.CRS)
-            .sysclk(48.mhz())
-            .pclk(24.mhz())
-            .freeze(&mut dp.FLASH);
+            // enable SYSCFG clock
+            dp.RCC.apb2enr.modify(|_, w| w.syscfgen().enabled());
 
-        let gpioc = dp.GPIOC.split(&mut rcc);
-        let mut led = cortex_m::interrupt::free(|cs| gpioc.pc8.into_push_pull_output(cs));
-        led.set_high().unwrap();
+            let mut rcc = dp
+                .RCC
+                .configure()
+                .hsi48()
+                .enable_crs(dp.CRS)
+                .sysclk(48.mhz())
+                .pclk(24.mhz())
+                .freeze(&mut dp.FLASH);
 
-        let gpioa = dp.GPIOA.split(&mut rcc);
+            let gpioa = dp.GPIOA.split(&mut rcc);
+            let gpioc = dp.GPIOC.split(&mut rcc);
+            let syscfg = dp.SYSCFG;
+            let exti = dp.EXTI;
 
-        // SerialPort and UsbDevice take refs to usb_bus but outlive init()
-        // so usb_bus must be owned with static lifetime
-        // see https://github.com/Rahix/shared-bus/issues/4#issuecomment-503512441
-        static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBusType>> = None;
+            // user button at PA0
+            let _ = gpioa.pa0.into_pull_down_input(cs);
 
-        let usb_bus = unsafe {
-            USB_BUS = Some(UsbBus::new(usb::Peripheral {
-                usb: dp.USB,
-                pin_dm: gpioa.pa11,
-                pin_dp: gpioa.pa12,
-            }));
-            USB_BUS.as_ref().unwrap()
-        };
+            // Enable external interrupt EXTI0 for PA0
+            syscfg.exticr1.write(|w| w.exti0().pa0());
 
-        let serial = SerialPort::new(&usb_bus);
+            // Set interrupt request mask for line 0
+            exti.imr.modify(|_, w| w.mr0().set_bit());
 
-        let usb_device = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
-            .manufacturer("Fake company")
-            .product("Serial port")
-            .serial_number("TEST")
-            .device_class(USB_CLASS_CDC)
-            .build();
+            // Set interrupt falling trigger for line 0
+            exti.ftsr.modify(|_, w| w.tr0().set_bit());
 
-        init::LateResources {
-            led: led,
-            usb_device: usb_device,
-            serial: serial,
-        }
+            let mut led = gpioc.pc8.into_push_pull_output(cs);
+            led.set_low().unwrap();
+
+            // SerialPort and UsbDevice take refs to usb_bus but outlive init()
+            // so usb_bus must be owned with static lifetime
+            // see https://github.com/Rahix/shared-bus/issues/4#issuecomment-503512441
+            static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBusType>> = None;
+
+            let usb_bus = unsafe {
+                USB_BUS = Some(UsbBus::new(usb::Peripheral {
+                    usb: dp.USB,
+                    pin_dm: gpioa.pa11,
+                    pin_dp: gpioa.pa12,
+                }));
+                USB_BUS.as_ref().unwrap()
+            };
+
+            let serial = SerialPort::new(&usb_bus);
+
+            let usb_device = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
+                .manufacturer("Fake company")
+                .product("Serial port")
+                .serial_number("TEST")
+                .device_class(USB_CLASS_CDC)
+                .build();
+
+            init::LateResources {
+                exti: exti,
+                led: led,
+                usb_device: usb_device,
+                serial: serial,
+            }
+        })
     }
 
     #[idle(resources = [led, usb_device, serial])]
@@ -101,6 +124,20 @@ const APP: () = {
                 }
                 _ => {}
             }
+        }
+    }
+
+    #[task(priority = 2, binds = EXTI0_1, resources = [exti, led])]
+    fn exti0_1(mut c: exti0_1::Context) {
+        // clear interrupt
+        c.resources.exti.pr.write(|w| w.pif0().set_bit());
+
+        let led = &mut c.resources.led;
+
+        if led.is_set_high().unwrap() {
+            led.set_low().unwrap();
+        } else {
+            led.set_high().unwrap();
         }
     }
 };
