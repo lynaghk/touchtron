@@ -16,7 +16,6 @@ use rtfm::app;
 
 const N: usize = 12;
 const M: usize = 2;
-const MAX_PACKET_SIZE: u16 = (M * N * 2) as u16;
 
 pub struct TouchData {
     pub inner: [u16; N * M],
@@ -109,8 +108,8 @@ const APP: () = {
             //this is a hack to workaround rtfm lifetime issues
             let usb_bus = USB_BUS.as_ref().unwrap();
 
-            let counter = counter::Counter::new(usb_bus, MAX_PACKET_SIZE);
-            let reporter = reporter::Reporter::new(usb_bus, MAX_PACKET_SIZE, TouchData::new());
+            let counter = counter::Counter::new(usb_bus);
+            let reporter = reporter::Reporter::new(usb_bus);
             let midi = usbd_midi::midi_device::MidiClass::new(usb_bus);
 
             let usb_device = UsbDeviceBuilder::new(usb_bus, UsbVidPid(0x16c0, 0x27dd))
@@ -135,10 +134,10 @@ const APP: () = {
 
     #[idle(resources = [usb_device, counter, reporter, midi])]
     fn idle(c: idle::Context) -> ! {
-        loop {
-            //generate random touch data
-            //c.resources.reporter.data;
+        //generate random touch data
+        c.resources.reporter.queue(TouchData::new());
 
+        loop {
             if !c.resources.usb_device.poll(&mut [
                 c.resources.counter,
                 c.resources.reporter,

@@ -13,16 +13,17 @@ where
 }
 
 const INTERVAL: u8 = 1; //Frame count.
+const MAX_PACKET_SIZE: u16 = 64;
 
 impl<B> Counter<'_, B>
 where
     B: UsbBus,
 {
-    pub fn new(alloc: &UsbBusAllocator<B>, max_packet_size: u16) -> Counter<'_, B> {
+    pub fn new(alloc: &UsbBusAllocator<B>) -> Counter<'_, B> {
         Counter {
             idx: 0,
             interface: alloc.interface(),
-            write_ep: alloc.interrupt(max_packet_size, INTERVAL),
+            write_ep: alloc.interrupt(MAX_PACKET_SIZE, INTERVAL),
             _marker: PhantomData,
         }
     }
