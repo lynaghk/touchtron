@@ -5,7 +5,8 @@ extern crate panic_semihosting;
 
 use stm32_usbd::UsbBus;
 use stm32f0xx_hal::{
-    adc, gpio,
+    adc::Adc,
+    gpio,
     gpio::{gpioa::*, gpioc::*, gpiof::*, Analog, Input, Output, PushPull},
     prelude::*,
     stm32 as hw, usb,
@@ -129,7 +130,13 @@ const APP: () = {
                 USB_BUS.as_ref().unwrap()
             };
 
-            let touchpad = Touchpad::new(gpioa.pa0.into_analog(cs));
+            let mut pa0 = gpioa.pa0.into_analog(cs);
+
+            let mut adc = Adc::new(dp.ADC, &mut rcc);
+            let x: u16 = adc.read(&mut pa0).unwrap();
+            cortex_m_semihosting::hprintln!("{:?}", x).unwrap();
+
+            let touchpad = Touchpad::new(pa0);
 
             let reporter = reporter::Reporter::new(&usb_bus);
 

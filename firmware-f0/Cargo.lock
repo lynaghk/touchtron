@@ -319,6 +319,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "cortex-m-rtfm",
+ "cortex-m-semihosting",
  "embedded-hal",
  "panic-semihosting",
  "stm32-usbd",
