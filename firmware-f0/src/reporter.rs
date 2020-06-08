@@ -9,8 +9,8 @@ where
     B: UsbBus,
     D: AsRef<[u8]>,
 {
-    data_being_transmitted: Option<(Offset, D)>,
-    data_to_be_transmitted: Option<D>,
+    transmitting: Option<(Offset, D)>,
+    queued: Option<D>,
     interface: InterfaceNumber,
     write_ep: EndpointIn<'a, B>,
 }
@@ -22,15 +22,15 @@ where
 {
     pub fn new(alloc: &UsbBusAllocator<B>) -> Reporter<'_, B, D> {
         Reporter {
-            data_being_transmitted: None,
-            data_to_be_transmitted: None,
+            transmitting: None,
+            queued: None,
             interface: alloc.interface(),
             write_ep: alloc.interrupt(MAX_PACKET_SIZE, INTERVAL),
         }
     }
 
     pub fn queue(&mut self, new_data: D) {
-        self.data_to_be_transmitted = Some(new_data);
+        self.queued = Some(new_data);
     }
 }
 
@@ -49,7 +49,7 @@ where
     }
 
     fn poll(&mut self) {
-        match &mut self.data_being_transmitted {
+        match &mut self.transmitting {
             Some((offset, msg)) => {
                 let n = msg.as_ref().len();
                 let end = core::cmp::min(*offset + MAX_PACKET_SIZE as usize, n);
@@ -57,14 +57,13 @@ where
                 self.write_ep.write(packet).ok();
                 *offset += packet.len();
                 if n == end {
-                    self.data_being_transmitted = None;
+                    self.transmitting = None;
                 }
             }
 
             None => {
-                if let Some(new_data) = self.data_to_be_transmitted.take() {
-                    //if we are out of bytes, it means we sent a full message, so swap the queued up message
-                    self.data_being_transmitted = Some((0, new_data));
+                if let Some(new_data) = self.queued.take() {
+                    self.transmitting = Some((0, new_data));
                     self.poll(); //recur so first chunk of new data is sent
                 }
             }
