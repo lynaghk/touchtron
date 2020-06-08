@@ -1,18 +1,41 @@
 #![no_std]
 #![no_main]
 
-//CDC-ACM serial port example using polling in a busy loop.
-//copied from https://github.com/stm32-rs/stm32-usbd-examples/blob/master/example-stm32f072rb/src/main.rs
-
 extern crate panic_semihosting;
 
 use stm32_usbd::UsbBus;
 use stm32f0xx_hal::stm32 as hw;
 use stm32f0xx_hal::{gpio, prelude::*, usb, usb::UsbBusType};
 use usb_device::prelude::*;
-use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use rtfm::app;
+
+mod reporter;
+
+const N: usize = 12;
+const M: usize = 8;
+
+pub struct TouchData {
+    pub inner: [u16; N * M],
+}
+
+impl TouchData {
+    fn new() -> TouchData {
+        TouchData {
+            inner: [1u16; M * N],
+        }
+    }
+}
+
+//TODO: is this the best way to get array of u16 into a slice of u8?
+impl AsRef<[u8]> for TouchData {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        unsafe {
+            core::slice::from_raw_parts_mut(self.inner.as_ptr() as *mut u8, self.inner.len() * 2)
+        }
+    }
+}
 
 #[app(device = hw)]
 const APP: () = {
@@ -20,7 +43,7 @@ const APP: () = {
         led: gpio::gpioc::PC8<gpio::Output<gpio::PushPull>>,
         exti: hw::EXTI,
         usb_device: UsbDevice<'static, UsbBusType>,
-        serial: SerialPort<'static, UsbBusType>,
+        reporter: reporter::Reporter<'static, UsbBusType, TouchData>,
     }
 
     #[init]
@@ -62,7 +85,7 @@ const APP: () = {
             let mut led = gpioc.pc8.into_push_pull_output(cs);
             led.set_low().unwrap();
 
-            // SerialPort and UsbDevice take refs to usb_bus but outlive init()
+            // UsbDevice take refs to usb_bus but outlive init()
             // so usb_bus must be owned with static lifetime
             // see https://github.com/Rahix/shared-bus/issues/4#issuecomment-503512441
             static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBusType>> = None;
@@ -76,53 +99,30 @@ const APP: () = {
                 USB_BUS.as_ref().unwrap()
             };
 
-            let serial = SerialPort::new(&usb_bus);
+            let reporter = reporter::Reporter::new(&usb_bus);
 
             let usb_device = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
                 .manufacturer("Fake company")
                 .product("Serial port")
                 .serial_number("TEST")
-                .device_class(USB_CLASS_CDC)
                 .build();
 
             init::LateResources {
-                exti: exti,
-                led: led,
-                usb_device: usb_device,
-                serial: serial,
+                exti,
+                led,
+                usb_device,
+                reporter,
             }
         })
     }
 
-    #[idle(resources = [led, usb_device, serial])]
-    fn idle(cx: idle::Context) -> ! {
+    #[idle(resources = [led, usb_device, reporter])]
+    fn idle(c: idle::Context) -> ! {
         loop {
-            if !cx.resources.usb_device.poll(&mut [cx.resources.serial]) {
+            c.resources.reporter.queue(TouchData::new());
+
+            if !c.resources.usb_device.poll(&mut [c.resources.reporter]) {
                 continue;
-            }
-
-            let mut buf = [0u8; 64];
-
-            match cx.resources.serial.read(&mut buf) {
-                Ok(count) if count > 0 => {
-                    // Echo back in upper case
-                    for c in buf[0..count].iter_mut() {
-                        if 0x61 <= *c && *c <= 0x7a {
-                            *c &= !0x20;
-                        }
-                    }
-
-                    let mut write_offset = 0;
-                    while write_offset < count {
-                        match cx.resources.serial.write(&buf[write_offset..count]) {
-                            Ok(len) if len > 0 => {
-                                write_offset += len;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
             }
         }
     }
