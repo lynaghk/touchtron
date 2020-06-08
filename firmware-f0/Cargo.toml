@@ -8,6 +8,7 @@ edition = "2018"
 cortex-m = "0.6"
 cortex-m-rt = "0.6"
 stm32f0xx-hal = { version = "0.16", features = ["rt", "stm32f072", "stm32-usbd"] }
+embedded-hal = { version = "*", features = ["unproven"] }
 stm32-usbd = { version = "0.5", features = ["ram_access_2x16"] }
 panic-semihosting = "0.5"
 usb-device = "0.2"
