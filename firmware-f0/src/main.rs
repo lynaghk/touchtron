@@ -19,8 +19,8 @@ use rtfm::app;
 
 mod reporter;
 
-const N: usize = 12;
-const M: usize = 8;
+const N: usize = 15;
+const M: usize = 10;
 
 pub struct TouchData {
     pub inner: [u16; N * M],
@@ -44,20 +44,30 @@ impl AsRef<[u8]> for TouchData {
     }
 }
 
-//impl embedded_hal::adc::Channel for u8;
-
+//TODO: macro to generate match by "iterating" over enum?
+//TODO: HAL turns ADC on/off between each read; probably want to use highest speed "continuous scanning" mode from hardware.
+type TouchpadInputPins = (PA0<Analog>, PA1<Analog>, PA2<Analog>);
 struct Touchpad {
-    channels: [u8; M],
+    adc: Adc,
+    pins: TouchpadInputPins,
 }
 
 impl Touchpad {
-    fn new(_pa0: PA0<Analog>) -> Self {
-        cortex_m::interrupt::free(|cs| {
-            Self {
-                //ADC channels for PA0--PA7
-                channels: [0, 1, 2, 3, 4, 5, 6, 7],
-            }
-        })
+    fn read(&mut self, idx: usize) -> Option<u16> {
+        //rust makes things "easy"
+        match idx {
+            0 => self.adc.read(&mut self.pins.0).ok(),
+            1 => self.adc.read(&mut self.pins.1).ok(),
+            2 => self.adc.read(&mut self.pins.2).ok(),
+            // 3 => self.adc.read(&mut self.pins.3).ok(),
+            // 4 => self.adc.read(&mut self.pins.4).ok(),
+            // 5 => self.adc.read(&mut self.pins.5).ok(),
+            // 6 => self.adc.read(&mut self.pins.6).ok(),
+            // 7 => self.adc.read(&mut self.pins.7).ok(),
+            // 8 => self.adc.read(&mut self.pins.8).ok(),
+            // 9 => self.adc.read(&mut self.pins.9).ok(),
+            _ => None,
+        }
     }
 }
 
@@ -130,13 +140,14 @@ const APP: () = {
                 USB_BUS.as_ref().unwrap()
             };
 
-            let mut pa0 = gpioa.pa0.into_analog(cs);
-
-            let mut adc = Adc::new(dp.ADC, &mut rcc);
-            let x: u16 = adc.read(&mut pa0).unwrap();
-            cortex_m_semihosting::hprintln!("{:?}", x).unwrap();
-
-            let touchpad = Touchpad::new(pa0);
+            let touchpad = Touchpad {
+                adc: Adc::new(dp.ADC, &mut rcc),
+                pins: (
+                    gpioa.pa0.into_analog(cs),
+                    gpioa.pa1.into_analog(cs),
+                    gpioa.pa2.into_analog(cs),
+                ),
+            };
 
             let reporter = reporter::Reporter::new(&usb_bus);
 
