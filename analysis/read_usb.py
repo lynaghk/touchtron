@@ -12,9 +12,9 @@ d.set_configuration()
 
 address = 0x81 #this is always the address of first endpoint.
 
-n = 12
-m = 8
-bytes_to_read = n*m*2 #u16 vals
+n = 15
+m = 10
+bytes_to_read = n * m * 2 #u16 vals
 
 for idx in range(1, 10):
     ret = d.read(address, bytes_to_read)
