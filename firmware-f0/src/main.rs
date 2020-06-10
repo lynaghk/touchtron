@@ -64,8 +64,58 @@ type TouchpadInputPins = (
     PB0<Analog>,
     PB1<Analog>,
 );
+
+enum PwmPin {
+    On(PB11<Alternate<AF2>>),
+    Off(PB11<Analog>),
+}
+use PwmPin::*;
+impl PwmPin {
+    fn on(self) -> Self {
+        match self {
+            On(p) => On(p),
+            Off(p) => cortex_m::interrupt::free(move |cs| On(p.into_alternate_af2(cs))),
+        }
+    }
+
+    fn off(self) -> Self {
+        match self {
+            Off(p) => Off(p),
+            On(p) => cortex_m::interrupt::free(move |cs| Off(p.into_analog(cs))),
+        }
+    }
+}
+
+// struct O1(PB11<Alternate<AF2>>);
+
+// impl O1 {
+//     fn on(t: &TIM2) {
+//         t.ccer.modify(|_, w| w.cc4e().set_bit());
+//     }
+//     fn off(t: &TIM2) {
+//         t.ccer.modify(|_, w| w.cc4e().clear_bit());
+//     }
+// }
+
+macro_rules! PwmOutput {
+    ($O: ident, $pin: ty, $TIM: ident, $ccXe: ident) => {
+        struct $O($pin);
+
+        impl $O {
+            fn on(&self, t: &$TIM) {
+                t.ccer.modify(|_, w| w.$ccXe().set_bit());
+            }
+            fn off(&self, t: &$TIM) {
+                t.ccer.modify(|_, w| w.$ccXe().clear_bit());
+            }
+        }
+    };
+}
+
+PwmOutput!(O1, PB11<Alternate<AF2>>, TIM2, cc4e);
+
 type TouchpadOutputPins = (
-    PB11<Alternate<AF2>>, //tim2ch4
+    O1,                   //tim2ch4
     PB10<Alternate<AF2>>, //tim2ch3
     PA10<Alternate<AF2>>, //tim1ch3
     PA9<Alternate<AF2>>,  //tim1ch2
@@ -84,6 +134,7 @@ type TouchpadOutputPins = (
 
 pub struct Touchpad {
     adc: Adc,
+    tim2: TIM2,
     input_pins: TouchpadInputPins,
     output_pins: TouchpadOutputPins,
 }
@@ -109,6 +160,9 @@ impl Touchpad {
     fn read_all(&mut self) -> TouchData {
         let mut d = TouchData::new();
         let col = 0;
+
+        self.output_pins.0.on(&self.tim2);
+
         for row in 0..M {
             let idx = row * N + col;
             d.inner[idx] = self.read(row).unwrap();
@@ -122,7 +176,7 @@ trait PWM {
 }
 
 macro_rules! impl_pwm {
-    ($TIM:ident, $tim:ident, $timXen:ident, $timXrst:ident, $apbenr:ident, $apbrstr:ident) => {
+    ($TIM:ident, $tim:ident, $timXen:ident, $apbenr:ident) => {
         impl PWM for $TIM {
             fn start(&self, rcc: &mut hw::RCC) {
                 //enable
@@ -211,9 +265,11 @@ const APP: () = {
                 .hsi48()
                 .enable_crs(dp.CRS)
                 .sysclk(48.mhz())
+                //TODO: should this be 48 too?
                 .pclk(24.mhz())
                 .freeze(&mut dp.FLASH);
 
+            //just make all gpio ports high speed
             unsafe {
                 dp.GPIOA.ospeedr.write(|w| w.bits(0xffff));
                 dp.GPIOB.ospeedr.write(|w| w.bits(0xffff));
@@ -259,9 +315,8 @@ const APP: () = {
             };
 
             //turn on PWM timers
-            //tim2ch4
             let mut rcc_raw = unsafe { hw::Peripherals::steal().RCC }; //HAL consumed this...but I want it.
-            impl_pwm!(TIM2, tim2, tim2en, tim2rst, apb1enr, apb1rstr);
+            impl_pwm!(TIM2, tim2, tim2en, apb1enr);
             dp.TIM2.start(&mut rcc_raw);
             //impl_pwm!(TIM1: (tim1, tim1en, tim1rst, apb2enr, apb2rstr));
 
@@ -272,6 +327,7 @@ const APP: () = {
 
             let touchpad = Touchpad {
                 adc: Adc::new(dp.ADC, &mut rcc),
+                tim2: dp.TIM2,
                 input_pins: (
                     gpioa.pa0.into_analog(cs),
                     gpioa.pa1.into_analog(cs),
@@ -285,7 +341,7 @@ const APP: () = {
                     gpiob.pb1.into_analog(cs),
                 ),
                 output_pins: (
-                    gpiob.pb11.into_alternate_af2(cs),
+                    O1(gpiob.pb11.into_alternate_af2(cs)),
                     gpiob.pb10.into_alternate_af2(cs),
                     gpioa.pa10.into_alternate_af2(cs),
                     gpioa.pa9.into_alternate_af2(cs),
@@ -302,6 +358,9 @@ const APP: () = {
                     gpiob.pb9.into_alternate_af2(cs),
                 ),
             };
+
+            //options: change pin mode at runtime, but this causes issues with the tuple types --- need to overwrite enum in place or erase typestate or something
+            //could also impl my own trait on each af pin to enable/disable associated timer channel
 
             let reporter = reporter::Reporter::new(&usb_bus);
 
