@@ -2,10 +2,10 @@
 #![no_main]
 
 extern crate panic_semihosting;
-
+use cortex_m::asm::{bkpt, wfi};
 use stm32_usbd::UsbBus;
 use stm32f0xx_hal::{
-    adc::Adc,
+    adc::{Adc, AdcSampleTime},
     gpio,
     gpio::{
         gpioa::*, gpiob::*, gpioc::*, gpiof::*, Alternate, Analog, Output, PushPull, AF0, AF1, AF2,
@@ -14,8 +14,7 @@ use stm32f0xx_hal::{
     prelude::*,
     rcc::Rcc,
     stm32 as hw,
-    stm32::TIM2,
-    usb,
+    stm32::{TIM1, TIM16, TIM17, TIM2, TIM3},
     usb::UsbBusType,
 };
 
@@ -65,76 +64,62 @@ type TouchpadInputPins = (
     PB1<Analog>,
 );
 
-enum PwmPin {
-    On(PB11<Alternate<AF2>>),
-    Off(PB11<Analog>),
-}
-use PwmPin::*;
-impl PwmPin {
-    fn on(self) -> Self {
-        match self {
-            On(p) => On(p),
-            Off(p) => cortex_m::interrupt::free(move |cs| On(p.into_alternate_af2(cs))),
-        }
-    }
-
-    fn off(self) -> Self {
-        match self {
-            Off(p) => Off(p),
-            On(p) => cortex_m::interrupt::free(move |cs| Off(p.into_analog(cs))),
-        }
-    }
-}
-
-// struct O1(PB11<Alternate<AF2>>);
-
-// impl O1 {
-//     fn on(t: &TIM2) {
-//         t.ccer.modify(|_, w| w.cc4e().set_bit());
-//     }
-//     fn off(t: &TIM2) {
-//         t.ccer.modify(|_, w| w.cc4e().clear_bit());
-//     }
-// }
-
 macro_rules! PwmOutput {
     ($O: ident, $pin: ty, $TIM: ident, $ccXe: ident) => {
         struct $O($pin);
 
         impl $O {
-            fn on(&self, t: &$TIM) {
-                t.ccer.modify(|_, w| w.$ccXe().set_bit());
+            fn on(&self) {
+                unsafe { &(*$TIM::ptr()) }
+                    .ccer
+                    .modify(|_, w| w.$ccXe().set_bit());
             }
-            fn off(&self, t: &$TIM) {
-                t.ccer.modify(|_, w| w.$ccXe().clear_bit());
+            fn off(&self) {
+                unsafe { &(*$TIM::ptr()) }
+                    .ccer
+                    .modify(|_, w| w.$ccXe().clear_bit());
             }
         }
     };
 }
 
+//TODO: how much code does this generate?
 PwmOutput!(O1, PB11<Alternate<AF2>>, TIM2, cc4e);
+PwmOutput!(O2, PB10<Alternate<AF2>>, TIM2, cc3e);
+PwmOutput!(O3, PA10<Alternate<AF2>>, TIM1, cc3e);
+PwmOutput!(O4, PA9<Alternate<AF2>>, TIM1, cc2e);
+PwmOutput!(O5, PA8<Alternate<AF2>>, TIM1, cc1e);
+PwmOutput!(O6, PB15<Alternate<AF2>>, TIM1, cc3e);
+PwmOutput!(O7, PB14<Alternate<AF2>>, TIM1, cc2e);
+PwmOutput!(O8, PB13<Alternate<AF2>>, TIM1, cc1e);
+PwmOutput!(O9, PB3<Alternate<AF2>>, TIM2, cc2e);
+PwmOutput!(O10, PB4<Alternate<AF1>>, TIM3, cc1e);
+PwmOutput!(O11, PB5<Alternate<AF1>>, TIM3, cc2e);
+PwmOutput!(O12, PB6<Alternate<AF2>>, TIM16, cc1e);
+PwmOutput!(O13, PB7<Alternate<AF2>>, TIM17, cc1e);
+PwmOutput!(O14, PB8<Alternate<AF2>>, TIM16, cc1e);
+PwmOutput!(O15, PB9<Alternate<AF2>>, TIM17, cc1e);
 
 type TouchpadOutputPins = (
-    O1,                   //tim2ch4
-    PB10<Alternate<AF2>>, //tim2ch3
-    PA10<Alternate<AF2>>, //tim1ch3
-    PA9<Alternate<AF2>>,  //tim1ch2
-    PA8<Alternate<AF2>>,  //tim1ch1
-    PB15<Alternate<AF2>>, //tim1ch3n
-    PB14<Alternate<AF2>>, //tim1ch2n
-    PB13<Alternate<AF2>>, //tim1ch1n
-    PB3<Alternate<AF2>>,  //tim2ch2
-    PB4<Alternate<AF1>>,  //tim3ch1
-    PB5<Alternate<AF1>>,  //tim3ch2
-    PB6<Alternate<AF2>>,  //tim16ch1n
-    PB7<Alternate<AF2>>,  //tim17ch1n
-    PB8<Alternate<AF2>>,  //tim16ch1
-    PB9<Alternate<AF2>>,  //tim17ch1
+    O1,  //tim2ch4
+    O2,  //tim2ch3
+    O3,  //tim1ch3
+    O4,  //tim1ch2
+    O5,  //tim1ch1
+    O6,  //tim1ch3n
+    O7,  //tim1ch2n
+    O8,  //tim1ch1n
+    O9,  //tim2ch2
+    O10, //tim3ch1
+    O11, //tim3ch2
+    O12, //tim16ch1n
+    O13, //tim17ch1n
+    O14, //tim16ch1
+    O15, //tim17ch1
 );
 
 pub struct Touchpad {
     adc: Adc,
-    tim2: TIM2,
     input_pins: TouchpadInputPins,
     output_pins: TouchpadOutputPins,
 }
@@ -157,15 +142,55 @@ impl Touchpad {
         }
     }
 
+    fn on(&mut self, idx: usize) {
+        match idx {
+            0 => self.output_pins.0.on(),
+            1 => self.output_pins.1.on(),
+            2 => self.output_pins.2.on(),
+            3 => self.output_pins.3.on(),
+            4 => self.output_pins.4.on(),
+            5 => self.output_pins.5.on(),
+            6 => self.output_pins.6.on(),
+            7 => self.output_pins.7.on(),
+            8 => self.output_pins.8.on(),
+            9 => self.output_pins.9.on(),
+            10 => self.output_pins.10.on(),
+            11 => self.output_pins.11.on(),
+            12 => self.output_pins.12.on(),
+            13 => self.output_pins.13.on(),
+            14 => self.output_pins.14.on(),
+            _ => {}
+        }
+    }
+    fn off(&mut self, idx: usize) {
+        match idx {
+            0 => self.output_pins.0.off(),
+            1 => self.output_pins.1.off(),
+            2 => self.output_pins.2.off(),
+            3 => self.output_pins.3.off(),
+            4 => self.output_pins.4.off(),
+            5 => self.output_pins.5.off(),
+            6 => self.output_pins.6.off(),
+            7 => self.output_pins.7.off(),
+            8 => self.output_pins.8.off(),
+            9 => self.output_pins.9.off(),
+            10 => self.output_pins.10.off(),
+            11 => self.output_pins.11.off(),
+            12 => self.output_pins.12.off(),
+            13 => self.output_pins.13.off(),
+            14 => self.output_pins.14.off(),
+            _ => {}
+        }
+    }
+
     fn read_all(&mut self) -> TouchData {
         let mut d = TouchData::new();
-        let col = 0;
-
-        self.output_pins.0.on(&self.tim2);
-
-        for row in 0..M {
-            let idx = row * N + col;
-            d.inner[idx] = self.read(row).unwrap();
+        for col in 0..N {
+            self.on(col);
+            for row in 0..M {
+                d.inner[row * N + col] = self.read(row).unwrap();
+            }
+            self.off(col);
         }
         d
     }
@@ -205,25 +230,24 @@ macro_rules! impl_pwm {
                 //auto reload preload enabled
                 self.cr1.modify(|_, w| w.arpe().set_bit());
 
-                self.ccer.modify(|_, w| {
-                    w.cc1e().set_bit();
-                    w.cc2e().set_bit();
-                    w.cc3e().set_bit();
-                    w.cc4e().set_bit();
-                    w
-                });
+                // self.ccer.modify(|_, w| {
+                //     w.cc1e().set_bit();
+                //     w.cc2e().set_bit();
+                //     w.cc3e().set_bit();
+                //     w.cc4e().set_bit();
+                //     w
+                // });
 
                 //set frequency
-                let ticks = 5_000;
-                self.arr.modify(|_, w| w.arr().bits(ticks));
+                let ticks = 5_000u16;
+                self.arr.modify(|_, w| w.arr().bits(ticks.into()));
 
                 //set duty cycle
-                //TODO: 16 vs 32 bit timer issue here?
                 unsafe {
-                    self.ccr1.write(|w| w.bits(ticks / 2));
-                    self.ccr2.write(|w| w.bits(ticks / 2));
-                    self.ccr3.write(|w| w.bits(ticks / 2));
-                    self.ccr4.write(|w| w.bits(ticks / 2));
+                    self.ccr1.write(|w| w.bits((ticks / 2).into()));
+                    self.ccr2.write(|w| w.bits((ticks / 2).into()));
+                    self.ccr3.write(|w| w.bits((ticks / 2).into()));
+                    self.ccr4.write(|w| w.bits((ticks / 2).into()));
                 }
 
                 //"As the preload registers are transferred to the shadow registers only when an update event occurs, before starting the counter, you have to initialize all the registers by setting the UG bit in the TIMx_EGR register."
@@ -306,7 +330,7 @@ const APP: () = {
             static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBusType>> = None;
 
             let usb_bus = unsafe {
-                USB_BUS = Some(UsbBus::new(usb::Peripheral {
+                USB_BUS = Some(UsbBus::new(stm32f0xx_hal::usb::Peripheral {
                     usb: dp.USB,
                     pin_dm: gpioa.pa11,
                     pin_dp: gpioa.pa12,
@@ -315,19 +339,24 @@ const APP: () = {
             };
 
             //turn on PWM timers
-            let mut rcc_raw = unsafe { hw::Peripherals::steal().RCC }; //HAL consumed this...but I want it.
+
+            impl_pwm!(TIM1, tim1, tim1en, apb2enr);
             impl_pwm!(TIM2, tim2, tim2en, apb1enr);
+            impl_pwm!(TIM3, tim3, tim3en, apb1enr);
+
+            //TODO:
+            // impl_pwm!(TIM16, tim16, tim16en, apb2enr);
+            // impl_pwm!(TIM17, tim17, tim17en, apb2enr);
+
+            let mut rcc_raw = unsafe { hw::Peripherals::steal().RCC }; //HAL consumed this...but I want it.
+            dp.TIM1.start(&mut rcc_raw);
             dp.TIM2.start(&mut rcc_raw);
-            //impl_pwm!(TIM1: (tim1, tim1en, tim1rst, apb2enr, apb2rstr));
+            dp.TIM3.start(&mut rcc_raw);
 
-            // TIM3: (tim3, tim3en, tim3rst, apb1enr, apb1rstr),
-            // TIM14: (tim14, tim14en, tim14rst, apb1enr, apb1rstr),
-            // TIM16: (tim16, tim16en, tim16rst, apb2enr, apb2rstr),
-            // TIM17: (tim17, tim17en, tim17rst, apb2enr, apb2rstr),
-
+            let mut adc = Adc::new(dp.ADC, &mut rcc);
+            adc.set_sample_time(AdcSampleTime::T_1);
             let touchpad = Touchpad {
-                adc: Adc::new(dp.ADC, &mut rcc),
-                tim2: dp.TIM2,
+                adc: adc,
                 input_pins: (
                     gpioa.pa0.into_analog(cs),
                     gpioa.pa1.into_analog(cs),
@@ -342,20 +371,20 @@ const APP: () = {
                 ),
                 output_pins: (
                     O1(gpiob.pb11.into_alternate_af2(cs)),
-                    gpiob.pb10.into_alternate_af2(cs),
-                    gpioa.pa10.into_alternate_af2(cs),
-                    gpioa.pa9.into_alternate_af2(cs),
-                    gpioa.pa8.into_alternate_af2(cs),
-                    gpiob.pb15.into_alternate_af2(cs),
-                    gpiob.pb14.into_alternate_af2(cs),
-                    gpiob.pb13.into_alternate_af2(cs),
-                    gpiob.pb3.into_alternate_af2(cs),
-                    gpiob.pb4.into_alternate_af1(cs),
-                    gpiob.pb5.into_alternate_af1(cs),
-                    gpiob.pb6.into_alternate_af2(cs),
-                    gpiob.pb7.into_alternate_af2(cs),
-                    gpiob.pb8.into_alternate_af2(cs),
-                    gpiob.pb9.into_alternate_af2(cs),
+                    O2(gpiob.pb10.into_alternate_af2(cs)),
+                    O3(gpioa.pa10.into_alternate_af2(cs)),
+                    O4(gpioa.pa9.into_alternate_af2(cs)),
+                    O5(gpioa.pa8.into_alternate_af2(cs)),
+                    O6(gpiob.pb15.into_alternate_af2(cs)),
+                    O7(gpiob.pb14.into_alternate_af2(cs)),
+                    O8(gpiob.pb13.into_alternate_af2(cs)),
+                    O9(gpiob.pb3.into_alternate_af2(cs)),
+                    O10(gpiob.pb4.into_alternate_af1(cs)),
+                    O11(gpiob.pb5.into_alternate_af1(cs)),
+                    O12(gpiob.pb6.into_alternate_af2(cs)),
+                    O13(gpiob.pb7.into_alternate_af2(cs)),
+                    O14(gpiob.pb8.into_alternate_af2(cs)),
+                    O15(gpiob.pb9.into_alternate_af2(cs)),
                 ),
             };
 
@@ -380,11 +409,20 @@ const APP: () = {
         })
     }
 
-    #[idle(resources = [leds, usb_device, touchpad, reporter])]
-    fn idle(c: idle::Context) -> ! {
+    #[idle(resources = [leds,  touchpad, reporter])]
+    fn idle(mut c: idle::Context) -> ! {
         loop {
-            c.resources.reporter.queue(c.resources.touchpad.read_all());
+            // let data = c.resources.touchpad.read_all();
+            let data = TouchData::new();
+            c.resources.reporter.lock(|reporter| reporter.queue(data));
+            wfi();
+        }
+    }
 
+    #[task(binds = USB, priority = 3, resources = [usb_device, reporter])]
+    fn usb(mut c: usb::Context) {
+        //cortex_m_semihosting::hprintln!("usb").unwrap();
+        loop {
             if !c.resources.usb_device.poll(&mut [c.resources.reporter]) {
                 continue;
             }
