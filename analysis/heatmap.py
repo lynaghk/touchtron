@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import time
 
-n = 10
-m = 15
+n = 15
+m = 10
 
 ####################################
 
@@ -16,7 +16,7 @@ address = 0x81 #this is always the address of first endpoint.
 bytes_to_read = n * m * 2 #u16 vals
 def read_touchpad():
     buffer = d.read(address, bytes_to_read)
-    matrix = np.frombuffer(buffer, np.dtype(np.uint16)).reshape(n,m)
+    matrix = np.frombuffer(buffer, np.dtype(np.uint16)).reshape(m,n)
     return matrix
 
 
@@ -24,9 +24,9 @@ def read_touchpad():
 
 fig = plt.figure()
 ax = fig.add_subplot()
-plot = ax.imshow(np.random.rand(n, m),
+plot = ax.imshow(np.random.rand(m,n),
                  vmin=0,
-                 vmax=4095, #ADC is actually 12bit only
+                 vmax=4095 / 4, #ADC is actually 12bit only
                  interpolation="nearest",
                  cmap="viridis")
 

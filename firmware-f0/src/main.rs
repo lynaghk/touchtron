@@ -52,30 +52,41 @@ impl AsRef<[u8]> for TouchData {
 
 //TODO: macro to generate match by "iterating" over enum?
 //TODO: HAL turns ADC on/off between each read; probably want to use highest speed "continuous scanning" mode from hardware.
-type TouchpadInputPins = (PA0<Analog>, PA1<Analog>, PA2<Analog>);
-type TouchpadOutputPins = (PB11<Alternate<AF2>>,);
-type OutputPins = (PA0<Analog>, PA1<Analog>, PA2<Analog>);
+type TouchpadInputPins = (
+    PA0<Analog>,
+    PA1<Analog>,
+    PA2<Analog>,
+    PA3<Analog>,
+    PA4<Analog>,
+    PA5<Analog>,
+    PA6<Analog>,
+    PA7<Analog>,
+    PB0<Analog>,
+    PB1<Analog>,
+);
+type TouchpadOutputPins = (
+    PB11<Alternate<AF2>>, //tim2ch4
+    PB10<Alternate<AF2>>, //tim2ch3
+    PA10<Alternate<AF2>>, //tim1ch3
+    PA9<Alternate<AF2>>,  //tim1ch2
+    PA8<Alternate<AF2>>,  //tim1ch1
+    PB15<Alternate<AF2>>, //tim1ch3n
+    PB14<Alternate<AF2>>, //tim1ch2n
+    PB13<Alternate<AF2>>, //tim1ch1n
+    PB3<Alternate<AF2>>,  //tim2ch2
+    PB4<Alternate<AF1>>,  //tim3ch1
+    PB5<Alternate<AF1>>,  //tim3ch2
+    PB6<Alternate<AF2>>,  //tim16ch1n
+    PB7<Alternate<AF2>>,  //tim17ch1n
+    PB8<Alternate<AF2>>,  //tim16ch1
+    PB9<Alternate<AF2>>,  //tim17ch1
+);
+
 pub struct Touchpad {
     adc: Adc,
     input_pins: TouchpadInputPins,
     output_pins: TouchpadOutputPins,
 }
-
-//PB11 tim2ch4
-//PB10 tim2ch3
-//PA10 tim1ch3
-//PA9 tim1ch2
-//PA8 tim1ch1
-//PB15 tim1ch3n
-//PB14 tim1ch2n
-//PB13 tim1ch1n
-//PB3 tim2ch2
-//PB4 tim3ch1
-//PB5 tim3ch2
-//PB6 tim16ch1n
-//PB7 tim17ch1n
-//PB8 tim16ch1
-//PB9 tim17ch1
 
 impl Touchpad {
     fn read(&mut self, idx: usize) -> Option<u16> {
@@ -84,21 +95,23 @@ impl Touchpad {
             0 => self.adc.read(&mut self.input_pins.0).ok(),
             1 => self.adc.read(&mut self.input_pins.1).ok(),
             2 => self.adc.read(&mut self.input_pins.2).ok(),
-            // 3 => self.adc.read(&mut self.pins.3).ok(),
-            // 4 => self.adc.read(&mut self.pins.4).ok(),
-            // 5 => self.adc.read(&mut self.pins.5).ok(),
-            // 6 => self.adc.read(&mut self.pins.6).ok(),
-            // 7 => self.adc.read(&mut self.pins.7).ok(),
-            // 8 => self.adc.read(&mut self.pins.8).ok(),
-            // 9 => self.adc.read(&mut self.pins.9).ok(),
+            3 => self.adc.read(&mut self.input_pins.3).ok(),
+            4 => self.adc.read(&mut self.input_pins.4).ok(),
+            5 => self.adc.read(&mut self.input_pins.5).ok(),
+            6 => self.adc.read(&mut self.input_pins.6).ok(),
+            7 => self.adc.read(&mut self.input_pins.7).ok(),
+            8 => self.adc.read(&mut self.input_pins.8).ok(),
+            9 => self.adc.read(&mut self.input_pins.9).ok(),
             _ => None,
         }
     }
 
     fn read_all(&mut self) -> TouchData {
         let mut d = TouchData::new();
-        for idx in 0..2 {
-            d.inner[idx] = self.read(idx).unwrap();
+        let col = 0;
+        for row in 0..M {
+            let idx = row * N + col;
+            d.inner[idx] = self.read(row).unwrap();
         }
         d
     }
@@ -147,7 +160,7 @@ macro_rules! impl_pwm {
                 });
 
                 //set frequency
-                let ticks = 1_000_000;
+                let ticks = 5_000;
                 self.arr.modify(|_, w| w.arr().bits(ticks));
 
                 //set duty cycle
@@ -200,6 +213,11 @@ const APP: () = {
                 .sysclk(48.mhz())
                 .pclk(24.mhz())
                 .freeze(&mut dp.FLASH);
+
+            unsafe {
+                dp.GPIOA.ospeedr.write(|w| w.bits(0xffff));
+                dp.GPIOB.ospeedr.write(|w| w.bits(0xffff));
+            }
 
             let gpioa = dp.GPIOA.split(&mut rcc);
             let gpiob = dp.GPIOB.split(&mut rcc);
@@ -258,11 +276,31 @@ const APP: () = {
                     gpioa.pa0.into_analog(cs),
                     gpioa.pa1.into_analog(cs),
                     gpioa.pa2.into_analog(cs),
+                    gpioa.pa3.into_analog(cs),
+                    gpioa.pa4.into_analog(cs),
+                    gpioa.pa5.into_analog(cs),
+                    gpioa.pa6.into_analog(cs),
+                    gpioa.pa7.into_analog(cs),
+                    gpiob.pb0.into_analog(cs),
+                    gpiob.pb1.into_analog(cs),
                 ),
-                output_pins: (gpiob
-                    .pb11
-                    .into_push_pull_output_hs(cs)
-                    .into_alternate_af2(cs),),
+                output_pins: (
+                    gpiob.pb11.into_alternate_af2(cs),
+                    gpiob.pb10.into_alternate_af2(cs),
+                    gpioa.pa10.into_alternate_af2(cs),
+                    gpioa.pa9.into_alternate_af2(cs),
+                    gpioa.pa8.into_alternate_af2(cs),
+                    gpiob.pb15.into_alternate_af2(cs),
+                    gpiob.pb14.into_alternate_af2(cs),
+                    gpiob.pb13.into_alternate_af2(cs),
+                    gpiob.pb3.into_alternate_af2(cs),
+                    gpiob.pb4.into_alternate_af1(cs),
+                    gpiob.pb5.into_alternate_af1(cs),
+                    gpiob.pb6.into_alternate_af2(cs),
+                    gpiob.pb7.into_alternate_af2(cs),
+                    gpiob.pb8.into_alternate_af2(cs),
+                    gpiob.pb9.into_alternate_af2(cs),
+                ),
             };
 
             let reporter = reporter::Reporter::new(&usb_bus);
