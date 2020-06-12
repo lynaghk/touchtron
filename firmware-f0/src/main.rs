@@ -189,6 +189,8 @@ impl Touchpad {
             self.on(col);
             for row in 0..M {
                 d.inner[row * N + col] = self.read(row).unwrap();
+                // cortex_m_semihosting::hprintln!("reading {}, {}", col, row).unwrap();
+                // d.inner[row * N + col] = 1;
             }
             self.off(col);
         }
@@ -221,6 +223,7 @@ macro_rules! impl_pwm {
                     //pwm mode 1
                     w.oc3m().bits(0b110);
                     w.oc4m().bits(0b110);
+
                     //preload
                     w.oc3pe().set_bit();
                     w.oc4pe().set_bit();
@@ -329,6 +332,9 @@ const APP: () = {
             // see https://github.com/Rahix/shared-bus/issues/4#issuecomment-503512441
             static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBusType>> = None;
 
+            //TODO: how the hell am I supposed to use this method? it's public, but the ::new constructor on UsbBus doesn't return the Bus, it wraps it in an allocator! There's a freeze method on the allocator that returns the bus, but it's only public within the usb crate. ugh.
+            //UsbBusType::force_reenumeration(&dp.USB, || {});
+
             let usb_bus = unsafe {
                 USB_BUS = Some(UsbBus::new(stm32f0xx_hal::usb::Peripheral {
                     usb: dp.USB,
@@ -354,7 +360,7 @@ const APP: () = {
             dp.TIM3.start(&mut rcc_raw);
 
             let mut adc = Adc::new(dp.ADC, &mut rcc);
-            adc.set_sample_time(AdcSampleTime::T_1);
+            //adc.set_sample_time(AdcSampleTime::T_1);
             let touchpad = Touchpad {
                 adc: adc,
                 input_pins: (
@@ -412,20 +418,25 @@ const APP: () = {
     #[idle(resources = [leds,  touchpad, reporter])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            // let data = c.resources.touchpad.read_all();
-            let data = TouchData::new();
+            let data = c.resources.touchpad.read_all();
+            //let data = TouchData::new();
             c.resources.reporter.lock(|reporter| reporter.queue(data));
-            wfi();
         }
     }
 
     #[task(binds = USB, priority = 3, resources = [usb_device, reporter])]
     fn usb(mut c: usb::Context) {
-        //cortex_m_semihosting::hprintln!("usb").unwrap();
-        loop {
-            if !c.resources.usb_device.poll(&mut [c.resources.reporter]) {
-                continue;
-            }
-        }
+        // let usb = unsafe { &(*hw::USB::ptr()) };
+        // let status = usb.istr.read();
+        // if status.susp().is_suspend() {}
+        // cortex_m_semihosting::hprintln!("usb interrupt: {:#018b}", status.bits()).unwrap();
+        //0b0000 1001 0000 0000
+        //cortex_m_semihosting::hprintln!("usb");
+
+        c.resources.usb_device.poll(&mut [c.resources.reporter]);
+        //TODO: not clear from the docs whether I need to call poll myself here: https://docs.rs/usb-device/0.2.5/usb_device/device/index.html
+        //if I do, then usb only works for a few heatmap frames --- maybe I get stuck in the interrupt handler due to the reporter's recursion?
+        // use usb_device::class_prelude::*;
+        // c.resources.reporter.poll();
     }
 };

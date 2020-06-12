@@ -47,7 +47,7 @@ where
 
         Ok(())
     }
-
+    //TODO, safe to rely on this method getting called? https://github.com/mvirkkunen/usb-device/issues/32
     fn poll(&mut self) {
         match &mut self.transmitting {
             Some((offset, msg)) => {
