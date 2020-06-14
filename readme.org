@@ -32,8 +32,18 @@ clever in software debouncing: https://github.com/dbrgn/debouncr/
 | STM32L152RBT6 |    1 |      24 |        |   64 | 2.90 |                             |
 | STM32F030C8T6 |    1 |      16 | x      |   48 | 0.79 | no usb                      |
 | STM32G031C6T6 |    1 |      16 |        |   48 | 1.68 |                             |
+** other ways to get more rows/columns:
 
+https://electronics.stackexchange.com/questions/293809/connecting-multiple-signals-to-adc
 
+CD4051B is $0.20 JLC part that demuxes 8 channels to 1. filed under "4000" series rather than "multiplexers" = (
+74HC4051D $0.12e JLC 8-to-1 demux
+
+need op-amp to buffer high-impedence touchpad sensor signal?
+
+STM32F070F6 
+
+$0.0015/joint
 
 ** Mac raw gesture data
 from https://ia801404.us.archive.org/15/items/2009-03-28-steike-code-macbook-multitouch/2009-03-28%20%28archived%202014-06-17%29%20-%20steike%20macbook%20multitouch.html
