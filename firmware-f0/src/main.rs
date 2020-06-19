@@ -27,6 +27,8 @@ mod reporter;
 const N: usize = 15;
 const M: usize = 10;
 const TOUCH_DATA_LEN: usize = 1 + M * N; //one extra byte at start for the PWM period
+
+const INITIAL_PERIOD: u16 = 4;
 pub struct TouchData {
     pub inner: [u16; TOUCH_DATA_LEN],
 }
@@ -84,43 +86,43 @@ macro_rules! PwmOutput {
 }
 
 //TODO: how much code does this generate?
-PwmOutput!(O1, PB11<Alternate<AF2>>, TIM2, cc4e);
-PwmOutput!(O2, PB10<Alternate<AF2>>, TIM2, cc3e);
-PwmOutput!(O3, PA10<Alternate<AF2>>, TIM1, cc3e);
-PwmOutput!(O4, PA9<Alternate<AF2>>, TIM1, cc2e);
-PwmOutput!(O5, PA8<Alternate<AF2>>, TIM1, cc1e);
-PwmOutput!(O6, PB15<Alternate<AF2>>, TIM1, cc3e);
-PwmOutput!(O7, PB14<Alternate<AF2>>, TIM1, cc2e);
-PwmOutput!(O8, PB13<Alternate<AF2>>, TIM1, cc1e);
-PwmOutput!(O9, PB3<Alternate<AF2>>, TIM2, cc2e);
-PwmOutput!(O10, PB4<Alternate<AF1>>, TIM3, cc1e);
-PwmOutput!(O11, PB5<Alternate<AF1>>, TIM3, cc2e);
-PwmOutput!(O12, PB6<Alternate<AF2>>, TIM16, cc1e);
-PwmOutput!(O13, PB7<Alternate<AF2>>, TIM17, cc1e);
-PwmOutput!(O14, PB8<Alternate<AF2>>, TIM16, cc1e);
-PwmOutput!(O15, PB9<Alternate<AF2>>, TIM17, cc1e);
+PwmOutput!(B0, PB11<Alternate<AF2>>, TIM2, cc4e);
+PwmOutput!(B1, PB10<Alternate<AF2>>, TIM2, cc3e);
+PwmOutput!(B2, PA10<Alternate<AF2>>, TIM1, cc3e);
+PwmOutput!(B3, PA9<Alternate<AF2>>, TIM1, cc2e);
+PwmOutput!(B4, PA8<Alternate<AF2>>, TIM1, cc1e);
+PwmOutput!(B5, PB15<Alternate<AF2>>, TIM1, cc3ne);
+PwmOutput!(B6, PB14<Alternate<AF2>>, TIM1, cc2ne);
+PwmOutput!(B7, PB13<Alternate<AF2>>, TIM1, cc1ne);
+PwmOutput!(B8, PB3<Alternate<AF2>>, TIM2, cc2e);
+PwmOutput!(B9, PB4<Alternate<AF1>>, TIM3, cc1e);
+PwmOutput!(B10, PB5<Alternate<AF1>>, TIM3, cc2e);
+PwmOutput!(B11, PB6<Alternate<AF2>>, TIM16, cc1e);
+PwmOutput!(B12, PB7<Alternate<AF2>>, TIM17, cc1e);
+PwmOutput!(B13, PB8<Alternate<AF2>>, TIM16, cc1e);
+PwmOutput!(B14, PB9<Alternate<AF2>>, TIM17, cc1e);
 
 type TouchpadOutputPins = (
-    O1,  //tim2ch4
-    O2,  //tim2ch3
-    O3,  //tim1ch3
-    O4,  //tim1ch2
-    O5,  //tim1ch1
-    O6,  //tim1ch3n
-    O7,  //tim1ch2n
-    O8,  //tim1ch1n
-    O9,  //tim2ch2
-    O10, //tim3ch1
-    O11, //tim3ch2
-    O12, //tim16ch1n
-    O13, //tim17ch1n
-    O14, //tim16ch1
-    O15, //tim17ch1
+    B0,  //tim2ch4
+    B1,  //tim2ch3
+    B2,  //tim1ch3
+    B3,  //tim1ch2
+    B4,  //tim1ch1
+    B5,  //tim1ch3n
+    B6,  //tim1ch2n
+    B7,  //tim1ch1n
+    B8,  //tim2ch2
+    B9,  //tim3ch1
+    B10, //tim3ch2
+    B11, //tim16ch1n
+    B12, //tim17ch1n
+    B13, //tim16ch1
+    B14, //tim17ch1
 );
 
 pub struct Touchpad {
     adc: Adc,
-    timers: (TIM1, TIM2, TIM3),
+    timers: (TIM1, TIM2, TIM3, TIM16, TIM17),
     input_pins: TouchpadInputPins,
     output_pins: TouchpadOutputPins,
     period: u16,
@@ -244,15 +246,7 @@ macro_rules! impl_pwm {
                 //auto reload preload enabled
                 self.cr1.modify(|_, w| w.arpe().set_bit());
 
-                // self.ccer.modify(|_, w| {
-                //     w.cc1e().set_bit();
-                //     w.cc2e().set_bit();
-                //     w.cc3e().set_bit();
-                //     w.cc4e().set_bit();
-                //     w
-                // });
-
-                self.set_period(5000);
+                self.set_period(INITIAL_PERIOD);
 
                 //finally, start timer
                 self.cr1.modify(|_, w| w.cen().set_bit());
@@ -362,21 +356,29 @@ const APP: () = {
             impl_pwm!(TIM1, tim1, tim1en, apb2enr);
             impl_pwm!(TIM2, tim2, tim2en, apb1enr);
             impl_pwm!(TIM3, tim3, tim3en, apb1enr);
-
-            //TODO:
             // impl_pwm!(TIM16, tim16, tim16en, apb2enr);
             // impl_pwm!(TIM17, tim17, tim17en, apb2enr);
 
             let mut rcc_raw = unsafe { hw::Peripherals::steal().RCC }; //HAL consumed this...but I want it.
 
             dp.TIM1.start(&mut rcc_raw);
+            //TIM1 has special "main output enable" bit that must be set before it emits signal
+            dp.TIM1.bdtr.modify(|_, w| {
+                w.moe().set_bit();
+                w.ossr().set_bit();
+                w
+            });
+
             dp.TIM2.start(&mut rcc_raw);
             dp.TIM3.start(&mut rcc_raw);
+            // dp.TIM16.start(&mut rcc_raw);
+            // dp.TIM17.start(&mut rcc_raw);
 
             let adc = Adc::new(dp.ADC, &mut rcc);
             //adc.set_sample_time(AdcSampleTime::T_1);
             let touchpad = Touchpad {
-                timers: (dp.TIM1, dp.TIM2, dp.TIM3),
+                period: INITIAL_PERIOD,
+                timers: (dp.TIM1, dp.TIM2, dp.TIM3, dp.TIM16, dp.TIM17),
                 adc: adc,
                 input_pins: (
                     gpioa.pa0.into_analog(cs),
@@ -391,21 +393,21 @@ const APP: () = {
                     gpiob.pb1.into_analog(cs),
                 ),
                 output_pins: (
-                    O1(gpiob.pb11.into_alternate_af2(cs)),
-                    O2(gpiob.pb10.into_alternate_af2(cs)),
-                    O3(gpioa.pa10.into_alternate_af2(cs)),
-                    O4(gpioa.pa9.into_alternate_af2(cs)),
-                    O5(gpioa.pa8.into_alternate_af2(cs)),
-                    O6(gpiob.pb15.into_alternate_af2(cs)),
-                    O7(gpiob.pb14.into_alternate_af2(cs)),
-                    O8(gpiob.pb13.into_alternate_af2(cs)),
-                    O9(gpiob.pb3.into_alternate_af2(cs)),
-                    O10(gpiob.pb4.into_alternate_af1(cs)),
-                    O11(gpiob.pb5.into_alternate_af1(cs)),
-                    O12(gpiob.pb6.into_alternate_af2(cs)),
-                    O13(gpiob.pb7.into_alternate_af2(cs)),
-                    O14(gpiob.pb8.into_alternate_af2(cs)),
-                    O15(gpiob.pb9.into_alternate_af2(cs)),
+                    B0(gpiob.pb11.into_alternate_af2(cs)),
+                    B1(gpiob.pb10.into_alternate_af2(cs)),
+                    B2(gpioa.pa10.into_alternate_af2(cs)),
+                    B3(gpioa.pa9.into_alternate_af2(cs)),
+                    B4(gpioa.pa8.into_alternate_af2(cs)),
+                    B5(gpiob.pb15.into_alternate_af2(cs)),
+                    B6(gpiob.pb14.into_alternate_af2(cs)),
+                    B7(gpiob.pb13.into_alternate_af2(cs)),
+                    B8(gpiob.pb3.into_alternate_af2(cs)),
+                    B9(gpiob.pb4.into_alternate_af1(cs)),
+                    B10(gpiob.pb5.into_alternate_af1(cs)),
+                    B11(gpiob.pb6.into_alternate_af2(cs)),
+                    B12(gpiob.pb7.into_alternate_af2(cs)),
+                    B13(gpiob.pb8.into_alternate_af2(cs)),
+                    B14(gpiob.pb9.into_alternate_af2(cs)),
                 ),
             };
 
@@ -432,15 +434,13 @@ const APP: () = {
 
     #[idle(resources = [leds,  touchpad, reporter])]
     fn idle(mut c: idle::Context) -> ! {
-        let mut period: u16 = 1000;
         loop {
             let tp = &mut c.resources.touchpad;
+            let data = tp.read_all();
             c.resources.reporter.lock(|reporter| {
                 if reporter.queued.is_none() {
-                    reporter.queue(tp.read_all());
-                    //double period on every loop so we can scan the frequency space to see what works best.
-                    period = period.wrapping_mul(2);
-                    tp.set_period(period);
+                    reporter.queue(data);
+                    //tp.set_period(tp.period.wrapping_add(1000));
                 }
             });
         }
