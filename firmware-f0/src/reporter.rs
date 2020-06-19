@@ -10,7 +10,7 @@ where
     D: AsRef<[u8]>,
 {
     transmitting: Option<(Offset, D)>,
-    queued: Option<D>,
+    pub queued: Option<D>,
     interface: InterfaceNumber,
     write_ep: EndpointIn<'a, B>,
 }

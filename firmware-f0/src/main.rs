@@ -26,15 +26,15 @@ mod reporter;
 
 const N: usize = 15;
 const M: usize = 10;
-
+const TOUCH_DATA_LEN: usize = 1 + M * N; //one extra byte at start for the PWM period
 pub struct TouchData {
-    pub inner: [u16; N * M],
+    pub inner: [u16; TOUCH_DATA_LEN],
 }
 
 impl TouchData {
     fn new() -> TouchData {
         TouchData {
-            inner: [0u16; M * N],
+            inner: [0u16; TOUCH_DATA_LEN],
         }
     }
 }
@@ -120,8 +120,10 @@ type TouchpadOutputPins = (
 
 pub struct Touchpad {
     adc: Adc,
+    timers: (TIM1, TIM2, TIM3),
     input_pins: TouchpadInputPins,
     output_pins: TouchpadOutputPins,
+    period: u16,
 }
 
 impl Touchpad {
@@ -183,12 +185,13 @@ impl Touchpad {
         }
     }
 
-    fn read_all(&mut self) -> TouchData {
+    pub fn read_all(&mut self) -> TouchData {
         let mut d = TouchData::new();
+        d.inner[0] = self.period;
         for col in 0..N {
             self.on(col);
             for row in 0..M {
-                d.inner[row * N + col] = self.read(row).unwrap();
+                d.inner[1 + row * N + col] = self.read(row).unwrap();
                 // cortex_m_semihosting::hprintln!("reading {}, {}", col, row).unwrap();
                 // d.inner[row * N + col] = 1;
             }
@@ -196,10 +199,18 @@ impl Touchpad {
         }
         d
     }
+
+    pub fn set_period(&mut self, period: u16) {
+        self.period = period;
+        self.timers.0.set_period(period);
+        self.timers.1.set_period(period);
+        self.timers.2.set_period(period);
+    }
 }
 
 trait PWM {
     fn start(&self, rcc: &mut hw::RCC);
+    fn set_period(&self, ticks: u16);
 }
 
 macro_rules! impl_pwm {
@@ -241,11 +252,16 @@ macro_rules! impl_pwm {
                 //     w
                 // });
 
-                //set frequency
-                let ticks = 5_000u16;
+                self.set_period(5000);
+
+                //finally, start timer
+                self.cr1.modify(|_, w| w.cen().set_bit());
+            }
+
+            fn set_period(&self, ticks: u16) {
                 self.arr.modify(|_, w| w.arr().bits(ticks.into()));
 
-                //set duty cycle
+                //set 50% duty cycle
                 unsafe {
                     self.ccr1.write(|w| w.bits((ticks / 2).into()));
                     self.ccr2.write(|w| w.bits((ticks / 2).into()));
@@ -255,9 +271,6 @@ macro_rules! impl_pwm {
 
                 //"As the preload registers are transferred to the shadow registers only when an update event occurs, before starting the counter, you have to initialize all the registers by setting the UG bit in the TIMx_EGR register."
                 self.egr.write(|w| w.ug().update());
-
-                //finally, start timer
-                self.cr1.modify(|_, w| w.cen().set_bit());
             }
         }
     };
@@ -355,13 +368,15 @@ const APP: () = {
             // impl_pwm!(TIM17, tim17, tim17en, apb2enr);
 
             let mut rcc_raw = unsafe { hw::Peripherals::steal().RCC }; //HAL consumed this...but I want it.
+
             dp.TIM1.start(&mut rcc_raw);
             dp.TIM2.start(&mut rcc_raw);
             dp.TIM3.start(&mut rcc_raw);
 
-            let mut adc = Adc::new(dp.ADC, &mut rcc);
+            let adc = Adc::new(dp.ADC, &mut rcc);
             //adc.set_sample_time(AdcSampleTime::T_1);
             let touchpad = Touchpad {
+                timers: (dp.TIM1, dp.TIM2, dp.TIM3),
                 adc: adc,
                 input_pins: (
                     gpioa.pa0.into_analog(cs),
@@ -417,10 +432,17 @@ const APP: () = {
 
     #[idle(resources = [leds,  touchpad, reporter])]
     fn idle(mut c: idle::Context) -> ! {
+        let mut period: u16 = 1000;
         loop {
-            let data = c.resources.touchpad.read_all();
-            //let data = TouchData::new();
-            c.resources.reporter.lock(|reporter| reporter.queue(data));
+            let tp = &mut c.resources.touchpad;
+            c.resources.reporter.lock(|reporter| {
+                if reporter.queued.is_none() {
+                    reporter.queue(tp.read_all());
+                    //double period on every loop so we can scan the frequency space to see what works best.
+                    period = period.wrapping_mul(2);
+                    tp.set_period(period);
+                }
+            });
         }
     }
 
