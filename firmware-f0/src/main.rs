@@ -2,7 +2,7 @@
 #![no_main]
 
 extern crate panic_semihosting;
-use cortex_m::asm::{bkpt, wfi};
+use cortex_m::asm::{bkpt, delay, wfi};
 use stm32_usbd::UsbBus;
 use stm32f0xx_hal::{
     adc::{Adc, AdcSampleTime},
@@ -28,7 +28,7 @@ const N: usize = 15;
 const M: usize = 10;
 const TOUCH_DATA_LEN: usize = 1 + M * N; //one extra byte at start for the PWM period
 
-const INITIAL_PERIOD: u16 = 4;
+const INITIAL_PERIOD: u16 = 4; //Multitouch paper suggests peak SNR at 10 MHz freq
 pub struct TouchData {
     pub inner: [u16; TOUCH_DATA_LEN],
 }
@@ -192,8 +192,9 @@ impl Touchpad {
         d.inner[0] = self.period;
         for col in 0..N {
             self.on(col);
+
             for row in 0..M {
-                d.inner[1 + row * N + col] = self.read(row).unwrap();
+                d.inner[1 + row * N + col] += self.read(row).unwrap();
                 // cortex_m_semihosting::hprintln!("reading {}, {}", col, row).unwrap();
                 // d.inner[row * N + col] = 1;
             }
@@ -261,6 +262,11 @@ macro_rules! impl_pwm {
                     self.ccr2.write(|w| w.bits((ticks / 2).into()));
                     self.ccr3.write(|w| w.bits((ticks / 2).into()));
                     self.ccr4.write(|w| w.bits((ticks / 2).into()));
+
+                    // self.ccr1.write(|w| w.bits(2));
+                    // self.ccr2.write(|w| w.bits(2));
+                    // self.ccr3.write(|w| w.bits(2));
+                    // self.ccr4.write(|w| w.bits(2));
                 }
 
                 //"As the preload registers are transferred to the shadow registers only when an update event occurs, before starting the counter, you have to initialize all the registers by setting the UG bit in the TIMx_EGR register."
@@ -300,7 +306,7 @@ const APP: () = {
                 .enable_crs(dp.CRS)
                 .sysclk(48.mhz())
                 //TODO: should this be 48 too?
-                .pclk(24.mhz())
+                .pclk(48.mhz())
                 .freeze(&mut dp.FLASH);
 
             //just make all gpio ports high speed
@@ -374,8 +380,8 @@ const APP: () = {
             // dp.TIM16.start(&mut rcc_raw);
             // dp.TIM17.start(&mut rcc_raw);
 
-            let adc = Adc::new(dp.ADC, &mut rcc);
-            //adc.set_sample_time(AdcSampleTime::T_1);
+            let mut adc = Adc::new(dp.ADC, &mut rcc);
+            //adc.set_sample_time(AdcSampleTime::T_41);
             let touchpad = Touchpad {
                 period: INITIAL_PERIOD,
                 timers: (dp.TIM1, dp.TIM2, dp.TIM3, dp.TIM16, dp.TIM17),
@@ -434,19 +440,13 @@ const APP: () = {
 
     #[idle(resources = [leds,  touchpad, reporter])]
     fn idle(mut c: idle::Context) -> ! {
-        let mut idx = 0;
-
         loop {
             let tp = &mut c.resources.touchpad;
-            //let data = tp.read_all();
+            let data = tp.read_all();
 
             c.resources.reporter.lock(|reporter| {
                 if reporter.queued.is_none() {
-                    let mut data = TouchData::new();
-                    data.inner[idx] = 2 ^ 16 - 1;
-                    idx = (idx + 1) % (N * M);
                     reporter.queue(data);
-
                     //tp.set_period(tp.period.wrapping_add(1000));
                 }
             });

@@ -182,3 +182,19 @@ Ah, yeah. If I just read 150 frames without trying to numpy, it takes 751ms, whi
 Nice when computers actually keep good time.
 
 So how come I get flickering ADC measurement?
+
+---
+
+with no touches, noise readings are within 100--200. a touch goes up to around 300.
+Maybe the flicker is because the sample is taken entirely within PWM "off" time?
+Doesn't seem possible if period is 4 ticks.
+
+Okay, even connecting an ADC pin directly to a PWM output, the columns "flicker".
+But when connecting to a 3.3V rail, the entire ADC row is lit as expected.
+So maybe I don't fully understand my PWM signal?
+Perhaps I need to just set the ADC to go in "low frequency mode".
+Or just do that in software by averaging multiple readings.
+
+
+
+
