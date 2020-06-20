@@ -434,12 +434,19 @@ const APP: () = {
 
     #[idle(resources = [leds,  touchpad, reporter])]
     fn idle(mut c: idle::Context) -> ! {
+        let mut idx = 0;
+
         loop {
             let tp = &mut c.resources.touchpad;
-            let data = tp.read_all();
+            //let data = tp.read_all();
+
             c.resources.reporter.lock(|reporter| {
                 if reporter.queued.is_none() {
+                    let mut data = TouchData::new();
+                    data.inner[idx] = 2 ^ 16 - 1;
+                    idx = (idx + 1) % (N * M);
                     reporter.queue(data);
+
                     //tp.set_period(tp.period.wrapping_add(1000));
                 }
             });

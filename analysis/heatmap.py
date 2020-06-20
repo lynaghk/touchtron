@@ -53,7 +53,7 @@ def animate(i):
         exit(0)
 
     pwm_period = data[0]
-    print(pwm_period)
+    #print(pwm_period)
     matrix = data[1:].reshape(m,n)
     plot.set_data(matrix/np.amax(matrix))
     time_taken = time.time() - start
@@ -61,3 +61,9 @@ def animate(i):
 
 ani = animation.FuncAnimation(fig, animate, fargs=(), interval=16)
 plt.show()
+
+
+# start = time.time()
+# for idx in range(150):
+#     read_touchpad();
+# print(time.time() - start)

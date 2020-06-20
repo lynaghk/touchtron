@@ -1,7 +1,7 @@
 use usb_device::class::UsbClass;
 use usb_device::class_prelude::*;
 
-const INTERVAL: u8 = 1; //Frame count.
+const INTERVAL: u8 = 1; //Frame count. (1 frame / ms for full speed devices)
 const MAX_PACKET_SIZE: u16 = 64; // USB full speed max packet size is 64
 type Offset = usize;
 pub struct Reporter<'a, B, D>

@@ -165,3 +165,20 @@ I have also tried copying the MultitouchSupport.framework folder in to the folde
 Is this different in 10.6 then? Am I missing something?
 — Jonathan 2009-09-21
 [This was preemptively answered by comex, but his comment was stuck in the 
+* Log
+** 2020 June 20 USB speed test
+
+USB full speed => 64 bytes/frame.
+Max polling interval = every frame (1 frame/ms).
+151 u16 vals = 302 bytes => theoretical top speed of 1 report every 5ms.
+
+According to my python code, I'm getting about 160--180 reads/sec (5.5 -- 6.3ms). Cool.
+
+So how come when I report synthetic data with a single filled square moving through the index, it takes ~5 seconds to go through all 150 cells?
+
+Maybe the delay is on the rendering side?
+
+Ah, yeah. If I just read 150 frames without trying to numpy, it takes 751ms, which is almost exactly 5*150.
+Nice when computers actually keep good time.
+
+So how come I get flickering ADC measurement?
