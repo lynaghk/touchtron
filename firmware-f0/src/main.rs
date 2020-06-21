@@ -5,7 +5,6 @@ extern crate panic_semihosting;
 use cortex_m::asm::{bkpt, delay, wfi};
 use stm32_usbd::UsbBus;
 use stm32f0xx_hal::{
-    adc::{Adc, AdcSampleTime},
     gpio,
     gpio::{
         gpioa::*, gpiob::*, gpioc::*, gpiof::*, Alternate, Analog, Output, PushPull, AF0, AF1, AF2,
@@ -22,13 +21,17 @@ use usb_device::prelude::*;
 
 use rtfm::app;
 
+mod adc;
 mod reporter;
+use adc::Adc;
 
 const N: usize = 15;
 const M: usize = 10;
 const TOUCH_DATA_LEN: usize = 1 + M * N; //one extra byte at start for the PWM period
 
 const INITIAL_PERIOD: u16 = 4; //Multitouch paper suggests peak SNR at 10 MHz freq
+
+#[derive(Copy, Clone)]
 pub struct TouchData {
     pub inner: [u16; TOUCH_DATA_LEN],
 }
@@ -37,6 +40,25 @@ impl TouchData {
     fn new() -> TouchData {
         TouchData {
             inner: [0u16; TOUCH_DATA_LEN],
+        }
+    }
+
+    fn clear(&mut self) {
+        for idx in 0..TOUCH_DATA_LEN {
+            self.inner[idx] = 0;
+        }
+    }
+
+    fn take(&mut self) -> Self {
+        let copy = self.clone();
+        self.clear();
+        copy
+    }
+
+    fn add(&mut self, other: &TouchData) {
+        self.inner[0] += 1;
+        for idx in 1..TOUCH_DATA_LEN {
+            self.inner[idx] += other.inner[idx];
         }
     }
 }
@@ -126,26 +148,12 @@ pub struct Touchpad {
     input_pins: TouchpadInputPins,
     output_pins: TouchpadOutputPins,
     period: u16,
+    in_progress: TouchData,
+    current_row: usize,
+    current_col: usize,
 }
 
 impl Touchpad {
-    fn read(&mut self, idx: usize) -> Option<u16> {
-        //rust makes things "easy"
-        match idx {
-            0 => self.adc.read(&mut self.input_pins.0).ok(),
-            1 => self.adc.read(&mut self.input_pins.1).ok(),
-            2 => self.adc.read(&mut self.input_pins.2).ok(),
-            3 => self.adc.read(&mut self.input_pins.3).ok(),
-            4 => self.adc.read(&mut self.input_pins.4).ok(),
-            5 => self.adc.read(&mut self.input_pins.5).ok(),
-            6 => self.adc.read(&mut self.input_pins.6).ok(),
-            7 => self.adc.read(&mut self.input_pins.7).ok(),
-            8 => self.adc.read(&mut self.input_pins.8).ok(),
-            9 => self.adc.read(&mut self.input_pins.9).ok(),
-            _ => None,
-        }
-    }
-
     fn on(&mut self, idx: usize) {
         match idx {
             0 => self.output_pins.0.on(),
@@ -187,20 +195,43 @@ impl Touchpad {
         }
     }
 
-    pub fn read_all(&mut self) -> TouchData {
-        let mut d = TouchData::new();
-        d.inner[0] = self.period;
-        for col in 0..N {
-            self.on(col);
+    pub fn adc_interrupt(&mut self) -> Option<TouchData> {
+        let status = self.adc.rb.isr.read();
 
-            for row in 0..M {
-                d.inner[1 + row * N + col] += self.read(row).unwrap();
-                // cortex_m_semihosting::hprintln!("reading {}, {}", col, row).unwrap();
-                // d.inner[row * N + col] = 1;
-            }
-            self.off(col);
+        if status.ovr().is_overrun() {
+            panic!("overrun");
         }
-        d
+
+        if status.eoc().is_complete() {
+            self.adc.rb.isr.modify(|_, w| w.eoc().clear());
+            self.next_row()
+        } else {
+            None
+        }
+    }
+
+    fn next_row(&mut self) -> Option<TouchData> {
+        self.in_progress.inner[self.current_row] = self.adc.rb.dr.read().bits() as u16;
+        self.current_row = (self.current_row + 1) % M;
+
+        if 0 == self.current_row {
+            self.next_column()
+        } else {
+            None
+        }
+    }
+
+    fn next_column(&mut self) -> Option<TouchData> {
+        self.off(self.current_col);
+        self.current_col = (self.current_col + 1) % N;
+
+        self.on(self.current_col);
+
+        if 0 == self.current_col {
+            Some(self.in_progress.take())
+        } else {
+            None
+        }
     }
 
     pub fn set_period(&mut self, period: u16) {
@@ -253,7 +284,7 @@ macro_rules! impl_pwm {
                 self.cr1.modify(|_, w| w.cen().set_bit());
             }
 
-            fn set_period(&self, ticks: u16) {
+            fn set_period(&self, ticks: u16) {n
                 self.arr.modify(|_, w| w.arr().bits(ticks.into()));
 
                 //set 50% duty cycle
@@ -380,12 +411,13 @@ const APP: () = {
             // dp.TIM16.start(&mut rcc_raw);
             // dp.TIM17.start(&mut rcc_raw);
 
-            let mut adc = Adc::new(dp.ADC, &mut rcc);
-            //adc.set_sample_time(AdcSampleTime::T_41);
-            let touchpad = Touchpad {
+            let mut touchpad = Touchpad {
+                current_row: 0,
+                current_col: 0,
                 period: INITIAL_PERIOD,
+                in_progress: TouchData::new(),
                 timers: (dp.TIM1, dp.TIM2, dp.TIM3, dp.TIM16, dp.TIM17),
-                adc: adc,
+                adc: Adc::new(dp.ADC, &mut rcc_raw),
                 input_pins: (
                     gpioa.pa0.into_analog(cs),
                     gpioa.pa1.into_analog(cs),
@@ -428,6 +460,8 @@ const APP: () = {
                 //.serial_number("TEST")
                 .build();
 
+            touchpad.adc.start();
+
             init::LateResources {
                 exti,
                 leds: (led0, led1),
@@ -438,23 +472,29 @@ const APP: () = {
         })
     }
 
-    #[idle(resources = [leds,  touchpad, reporter])]
-    fn idle(mut c: idle::Context) -> ! {
+    #[idle(resources = [leds, touchpad, reporter])]
+    fn idle(c: idle::Context) -> ! {
         loop {
-            let tp = &mut c.resources.touchpad;
-            let data = tp.read_all();
+            wfi();
+        }
+    }
 
-            c.resources.reporter.lock(|reporter| {
-                if reporter.queued.is_none() {
-                    reporter.queue(data);
-                    //tp.set_period(tp.period.wrapping_add(1000));
+    #[task(binds = ADC_COMP, priority = 3, resources = [touchpad, reporter])]
+    fn handle_adc(mut c: handle_adc::Context) {
+        if let Some(latest_reading) = c.resources.touchpad.adc_interrupt() {
+            match c.resources.reporter.queued {
+                Some(ref mut data) => {
+                    data.add(&latest_reading);
                 }
-            });
+                None => {
+                    c.resources.reporter.queue(latest_reading);
+                }
+            }
         }
     }
 
     #[task(binds = USB, priority = 3, resources = [usb_device, reporter])]
-    fn usb(mut c: usb::Context) {
+    fn usb(c: usb::Context) {
         // let usb = unsafe { &(*hw::USB::ptr()) };
         // let status = usb.istr.read();
         // if status.susp().is_suspend() {}

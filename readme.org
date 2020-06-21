@@ -166,6 +166,37 @@ Is this different in 10.6 then? Am I missing something?
 — Jonathan 2009-09-21
 [This was preemptively answered by comex, but his comment was stuck in the 
 * Log
+** 2020 June 21 Manual ADC usage
+
+ADC can be set to scan through all channels in order.
+Lets just do this continously, collecting values in a rolling buffer or something.
+Then when USB polls we can send all collected data to the host
+
+enable channels in ADC_CHSELR
+ADC_CFGR1.cont = 1
+
+set EOCIE flag so interrupt is generated after each sample taken
+clear EOC flag and transfer result to new buffer
+
+watch OVR flag for overrun. this shouldn't happen in normal operation if interrupt handler is fast enough.
+
+We could also setup DMA to read all rows, that'd be cool: (Set this after calibration phase:  ADC_CFGR1.DMAEN = 1)
+Eh, lets try that later.
+We should have plenty of time to use regular interrupts
+
+----
+
+
+Man, trying to write register stuff using rust SVD is a huge pain.
+Autocomplete doesn't work, lots of fiddly options about what's a method, what's a register, etc.
+Really thinking Rust and fancy types aren't worth it; they get in the way a lot, but I ALSO still end up having to cast to untyped ints and duplicate definitions to get things to work.
+
+Would be interesting to play with a mini-language / constraint system designed explicitly for microcontroller programming.
+
+
+
+
+
 ** 2020 June 20 USB speed test
 
 USB full speed => 64 bytes/frame.
