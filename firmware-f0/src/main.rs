@@ -27,7 +27,7 @@ use adc::Adc;
 
 const N: usize = 15;
 const M: usize = 10;
-const TOUCH_DATA_LEN: usize = 1 + M * N; //one extra byte at start for the PWM period
+const TOUCH_DATA_LEN: usize = 1 + M * N; //one extra val at start for the PWM period
 
 const INITIAL_PERIOD: u16 = 4; //Multitouch paper suggests peak SNR at 10 MHz freq
 
@@ -197,22 +197,24 @@ impl Touchpad {
 
     pub fn adc_interrupt(&mut self) -> Option<TouchData> {
         let status = self.adc.rb.isr.read();
-
+        //self.adc.rb.isr.modify(|_, w| w.eoc().clear());
+        // //cortex_m_semihosting::hprintln!("{:#018b}", status.bits()).unwrap();
         if status.ovr().is_overrun() {
             panic!("overrun");
         }
-
         if status.eoc().is_complete() {
-            self.adc.rb.isr.modify(|_, w| w.eoc().clear());
-            self.next_row()
+            //reading the register will clear the eoc flag
+            self.next_row(self.adc.rb.dr.read().bits() as u16)
         } else {
             None
         }
     }
 
-    fn next_row(&mut self) -> Option<TouchData> {
-        self.in_progress.inner[self.current_row] = self.adc.rb.dr.read().bits() as u16;
+    fn next_row(&mut self, reading: u16) -> Option<TouchData> {
+        self.in_progress.inner[1 + N * self.current_row + self.current_col] = reading;
         self.current_row = (self.current_row + 1) % M;
+        //        delay(200);
+        self.adc.start(self.current_row as u8);
 
         if 0 == self.current_row {
             self.next_column()
@@ -224,7 +226,6 @@ impl Touchpad {
     fn next_column(&mut self) -> Option<TouchData> {
         self.off(self.current_col);
         self.current_col = (self.current_col + 1) % N;
-
         self.on(self.current_col);
 
         if 0 == self.current_col {
@@ -284,7 +285,7 @@ macro_rules! impl_pwm {
                 self.cr1.modify(|_, w| w.cen().set_bit());
             }
 
-            fn set_period(&self, ticks: u16) {n
+            fn set_period(&self, ticks: u16) {
                 self.arr.modify(|_, w| w.arr().bits(ticks.into()));
 
                 //set 50% duty cycle
@@ -294,10 +295,10 @@ macro_rules! impl_pwm {
                     self.ccr3.write(|w| w.bits((ticks / 2).into()));
                     self.ccr4.write(|w| w.bits((ticks / 2).into()));
 
-                    // self.ccr1.write(|w| w.bits(2));
-                    // self.ccr2.write(|w| w.bits(2));
-                    // self.ccr3.write(|w| w.bits(2));
-                    // self.ccr4.write(|w| w.bits(2));
+                    // self.ccr1.write(|w| w.bits(1));
+                    // self.ccr2.write(|w| w.bits(1));
+                    // self.ccr1.write(|w| w.bits(1));
+                    // self.ccr4.write(|w| w.bits(1));
                 }
 
                 //"As the preload registers are transferred to the shadow registers only when an update event occurs, before starting the counter, you have to initialize all the registers by setting the UG bit in the TIMx_EGR register."
@@ -460,8 +461,6 @@ const APP: () = {
                 //.serial_number("TEST")
                 .build();
 
-            touchpad.adc.start();
-
             init::LateResources {
                 exti,
                 leds: (led0, led1),
@@ -472,8 +471,12 @@ const APP: () = {
         })
     }
 
-    #[idle(resources = [leds, touchpad, reporter])]
-    fn idle(c: idle::Context) -> ! {
+    #[idle(resources = [touchpad])]
+    fn idle(mut c: idle::Context) -> ! {
+        c.resources.touchpad.lock(|t| {
+            t.adc.start(0);
+        });
+
         loop {
             wfi();
         }

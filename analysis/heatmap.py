@@ -30,7 +30,7 @@ ax = fig.add_subplot()
 plot = ax.imshow(np.random.rand(m,n),
                  vmin=0,
                  #vmax=4095, #ADC is actually 12bit only
-                 vmax=1000,
+                 vmax=100,
                  interpolation="nearest",
                  cmap="viridis")
 
@@ -53,11 +53,10 @@ def animate(i):
             print("Read %s frames, quitting" % frames_to_read)
             exit(0)
 
-        pwm_period = data[0]
-        #print(pwm_period)
+        num_samples = data[0]
         # the [::-1] reverses data so we display in same orientation as physical touchpad
-        matrix = data[1:][::-1].reshape(m,n)
-        print(np.amin(matrix), np.amax(matrix))
+        matrix = data[1:][::-1].reshape(m,n) / num_samples - 80
+        print(num_samples, np.amax(matrix))
         plot.set_data(matrix)
         time_taken = time.time() - start
         #print(1. / time_taken)

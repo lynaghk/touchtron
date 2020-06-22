@@ -166,6 +166,23 @@ Is this different in 10.6 then? Am I missing something?
 — Jonathan 2009-09-21
 [This was preemptively answered by comex, but his comment was stuck in the 
 * Log
+** 2020 June 22 ADC overrun
+I keep getting overrun errors from the ADC, even when the interrupt just reads the register and does nothing else.
+Maybe this read is getting optimized away?
+Nah, must be timing because even if the interrupt runs only:
+
+    self.adc.rb.isr.modify(|_, w| w.eoc().clear());
+
+I still get overrun errors
+This doesn't make sense, is the ADC really sampling that fast?
+
+----
+
+
+with no pwm signal, noise is around 8--9.
+50--90 with a finger.
+With a single PWM, noise is around 80--100.
+
 ** 2020 June 21 Manual ADC usage
 
 ADC can be set to scan through all channels in order.

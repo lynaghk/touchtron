@@ -23,28 +23,30 @@ impl Adc {
         s.select_clock(rcc);
         s.calibrate();
 
-        s.rb.smpr.write(|w| w.smp().cycles239_5());
+        s.rb.smpr.modify(|_, w| w.smp().cycles239_5());
 
         s.rb.cfgr1.modify(|_, w| {
             w.res().twelve_bit();
             w.align().right();
-            w.cont().continuous();
+            //w.cont().continuous();
             w
         });
 
+        //enable interrupt on end of conversion
+        s.rb.ier.modify(|_, w| w.eocie().set_bit());
+
         //use all 10 adc channels. TODO: this should really come from the types of the input pins.
-        s.rb.chselr.write(|w| unsafe { w.bits(0b11_1111_1111) });
+        //s.rb.chselr.write(|w| unsafe { w.bits(0b11_1111_1111) });
 
         s.power_up();
-
-        // self.rb.cr.modify(|_, w| w.adstart().start_conversion());
-        // while self.rb.isr.read().eoc().is_not_complete() {}
-        // self.rb.dr.read().bits()
 
         s
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self, channel: u8) {
+        self.rb
+            .chselr
+            .write(|w| unsafe { w.bits(1_u32 << channel) });
         self.rb.cr.modify(|_, w| w.adstart().start_conversion());
     }
 
