@@ -12,7 +12,10 @@ rustup target add thumbv7m-none-eabi
 
 
 pip install pyusb
-brew install libusb
+brew install libusb 
+brew install PyQt5
+python3.8 -m pip install numpy pyqtgraph matplotlib pyusb scipy
+export PATH="/usr/local/opt/python@3.8/bin:$PATH"
 
 MIDI stuff:
 virtual keyboard for generating events: https://flit.github.io/projects/midikeys/
@@ -166,6 +169,21 @@ Is this different in 10.6 then? Am I missing something?
 — Jonathan 2009-09-21
 [This was preemptively answered by comex, but his comment was stuck in the 
 * Log
+To try:
+
++ hold channels at ground when not enabled.
++ paper's lowest SNR = 57 +/- 20; single touch SNR around 70 +/- 10; ratio of 15 is min required.
++ "We observed that thicker top insulators (more than 400 um) will render the interface unusable." (soldermask thickness ~ 25 um; silkscreen is similar.)
+
+** 2020 June 23 Python analysis
+
+Matplotlib code struggles to update heatmap quickly.
+Perf timing in code suggests it can run at 160 FPS but it's obviously not running that fast.
+Scaling the window makes it even laggier.
+
+Tried upgrading to python3.8, changing backend to qt5. no dice.
+
+
 ** 2020 June 22 ADC overrun
 I keep getting overrun errors from the ADC, even when the interrupt just reads the register and does nothing else.
 Maybe this read is getting optimized away?

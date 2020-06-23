@@ -13,7 +13,7 @@ use stm32f0xx_hal::{
     prelude::*,
     rcc::Rcc,
     stm32 as hw,
-    stm32::{TIM1, TIM16, TIM17, TIM2, TIM3},
+    stm32::{GPIOA, GPIOB, TIM1, TIM16, TIM17, TIM2, TIM3},
     usb::UsbBusType,
 };
 
@@ -89,40 +89,50 @@ type TouchpadInputPins = (
 );
 
 macro_rules! PwmOutput {
-    ($O: ident, $pin: ty, $TIM: ident, $ccXe: ident) => {
+    ($O: ident, $gpioX: ident, $moderI: ident, $pin: ty, $TIM: ident, $ccXe: ident) => {
         struct $O($pin);
 
         impl $O {
             fn on(&self) {
+                //enable pwm channel
                 unsafe { &(*$TIM::ptr()) }
                     .ccer
                     .modify(|_, w| w.$ccXe().set_bit());
+                //make pin alternate fn
+                unsafe { &(*$gpioX::ptr()) }
+                    .moder
+                    .write(|w| w.$moderI().alternate());
             }
             fn off(&self) {
                 unsafe { &(*$TIM::ptr()) }
                     .ccer
                     .modify(|_, w| w.$ccXe().clear_bit());
+
+                //make pin output (defaults to low)
+                unsafe { &(*$gpioX::ptr()) }
+                    .moder
+                    .write(|w| w.$moderI().output());
             }
         }
     };
 }
 
 //TODO: how much code does this generate?
-PwmOutput!(B0, PB11<Alternate<AF2>>, TIM2, cc4e);
-PwmOutput!(B1, PB10<Alternate<AF2>>, TIM2, cc3e);
-PwmOutput!(B2, PA10<Alternate<AF2>>, TIM1, cc3e);
-PwmOutput!(B3, PA9<Alternate<AF2>>, TIM1, cc2e);
-PwmOutput!(B4, PA8<Alternate<AF2>>, TIM1, cc1e);
-PwmOutput!(B5, PB15<Alternate<AF2>>, TIM1, cc3ne);
-PwmOutput!(B6, PB14<Alternate<AF2>>, TIM1, cc2ne);
-PwmOutput!(B7, PB13<Alternate<AF2>>, TIM1, cc1ne);
-PwmOutput!(B8, PB3<Alternate<AF2>>, TIM2, cc2e);
-PwmOutput!(B9, PB4<Alternate<AF1>>, TIM3, cc1e);
-PwmOutput!(B10, PB5<Alternate<AF1>>, TIM3, cc2e);
-PwmOutput!(B11, PB6<Alternate<AF2>>, TIM16, cc1e);
-PwmOutput!(B12, PB7<Alternate<AF2>>, TIM17, cc1e);
-PwmOutput!(B13, PB8<Alternate<AF2>>, TIM16, cc1e);
-PwmOutput!(B14, PB9<Alternate<AF2>>, TIM17, cc1e);
+PwmOutput!(B0, GPIOB, moder11, PB11<Alternate<AF2>>, TIM2, cc4e);
+PwmOutput!(B1, GPIOB, moder10, PB10<Alternate<AF2>>, TIM2, cc3e);
+PwmOutput!(B2, GPIOA, moder10, PA10<Alternate<AF2>>, TIM1, cc3e);
+PwmOutput!(B3, GPIOA, moder9, PA9<Alternate<AF2>>, TIM1, cc2e);
+PwmOutput!(B4, GPIOA, moder8, PA8<Alternate<AF2>>, TIM1, cc1e);
+PwmOutput!(B5, GPIOB, moder15, PB15<Alternate<AF2>>, TIM1, cc3ne);
+PwmOutput!(B6, GPIOB, moder14, PB14<Alternate<AF2>>, TIM1, cc2ne);
+PwmOutput!(B7, GPIOB, moder13, PB13<Alternate<AF2>>, TIM1, cc1ne);
+PwmOutput!(B8, GPIOB, moder3, PB3<Alternate<AF2>>, TIM2, cc2e);
+PwmOutput!(B9, GPIOB, moder4, PB4<Alternate<AF1>>, TIM3, cc1e);
+PwmOutput!(B10, GPIOB, moder5, PB5<Alternate<AF1>>, TIM3, cc2e);
+PwmOutput!(B11, GPIOB, moder6, PB6<Alternate<AF2>>, TIM16, cc1e);
+PwmOutput!(B12, GPIOB, moder7, PB7<Alternate<AF2>>, TIM17, cc1e);
+PwmOutput!(B13, GPIOB, moder8, PB8<Alternate<AF2>>, TIM16, cc1e);
+PwmOutput!(B14, GPIOB, moder9, PB9<Alternate<AF2>>, TIM17, cc1e);
 
 type TouchpadOutputPins = (
     B0,  //tim2ch4
