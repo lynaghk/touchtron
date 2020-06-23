@@ -10,12 +10,10 @@ rustup target add thumbv6m-none-eabi
 #for stm32f1 (blue pill board)
 rustup target add thumbv7m-none-eabi
 
+pip install numpy matplotlib scipy opencv-python
 
 pip install pyusb
 brew install libusb 
-brew install PyQt5
-python3.8 -m pip install numpy pyqtgraph matplotlib pyusb scipy
-export PATH="/usr/local/opt/python@3.8/bin:$PATH"
 
 MIDI stuff:
 virtual keyboard for generating events: https://flit.github.io/projects/midikeys/
