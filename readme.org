@@ -169,7 +169,6 @@ Is this different in 10.6 then? Am I missing something?
 * Log
 To try:
 
-+ hold channels at ground when not enabled.
 + paper's lowest SNR = 57 +/- 20; single touch SNR around 70 +/- 10; ratio of 15 is min required.
 + "We observed that thicker top insulators (more than 400 um) will render the interface unusable." (soldermask thickness ~ 25 um; silkscreen is similar.)
 

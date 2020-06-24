@@ -16,8 +16,7 @@ def animate():
     start = time.time()
 
     m = np.random.randint(0, 255, size=(N,N), dtype=np.uint8)
-    m = cv2.resize(m, (400,400), interpolation=cv2.INTER_NEAREST)
-    m = cv2.applyColorMap(m, cv2.COLORMAP_JET)
+    m = cv2.applyColorMap(m, cv2.COLORMAP_VIRIDIS)
     cv2.imshow("foo", m)
     time_taken = time.time() - start
     fps_calc = 1. / time_taken
