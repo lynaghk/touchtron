@@ -172,6 +172,39 @@ To try:
 + paper's lowest SNR = 57 +/- 20; single touch SNR around 70 +/- 10; ratio of 15 is min required.
 + "We observed that thicker top insulators (more than 400 um) will render the interface unusable." (soldermask thickness ~ 25 um; silkscreen is similar.)
 
+** 2020 June 24 measurement
+
+Using Hackerspace's Hantek DSO8060 portable scope to measure touchpad.
+
+Measuring output ch 6, input ch 4
+
+4ms period for a single pin --- this is the column scan.
+Zooming in it reads 10MHz signal for the PWM.
+
+PWM peak to peak voltage is 1.9V
+Untouched 220mV
+Touched 0.9--1.1V but the signal floats all over the place (varying DC offset)
+However, it's clearly coupled to the PWM output signal
+
+At period = 48 (1MHz):
+
+PWM peak to peak is 3V
+untouched 260mV
+touched 0.8--1V, also floating everywhere. why?
+
+hmm, maybe the floating was scope probe error.
+Going back to 9.6MHz signal (period = 4; must be an extra cycle in there somewhere.) I see
+
+1.9 PWM peak to peak
+220 mV untouched
+550 mV light touch
+
+sometimes the floor wiggles around, other times I can cause big amplitude increase from coupling but the floor stays constant.
+I think the floor movement is noise from my finger
+maybe I need a high pass filter to get rid of it?
+
+
+
 ** 2020 June 23 Python analysis
 
 Matplotlib code struggles to update heatmap quickly.
