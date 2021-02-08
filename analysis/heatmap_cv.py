@@ -95,7 +95,9 @@ def step():
     keypoints = Detector.detect(m)
     m = cv2.applyColorMap(m, cv2.COLORMAP_VIRIDIS)
 
-    m = cv2.drawKeypoints(m, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
+    #m = cv2.drawKeypoints(m, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
+    for k in keypoints:
+        m = cv2.circle(m, (int(k.pt[0]), int(k.pt[1])), 8, (0, 0, 255), -1)
     #m = cv2.drawKeypoints(m, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow("processed", m)
 
@@ -118,7 +120,7 @@ while(True):
         step()
     except Exception as e:
         print(e)
-    if cv2.waitKey(10) & 0xFF == ord('q'):
+    if cv2.waitKey(20) & 0xFF == ord('q'):
         break
 
 #cv2.destroyAllWindows()
