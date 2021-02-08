@@ -1,25 +1,9 @@
-# Touchtron
-
-Misc. experiments with Rust + USB, Kevin making a touchpad.
-
-* MacOS Setup 
-
-#for stm32f0 (kevin custom board)
-rustup target add thumbv6m-none-eabi 
-
-#for stm32f1 (blue pill board)
-rustup target add thumbv7m-none-eabi
-
-pip install numpy matplotlib scipy opencv-python
-
-pip install pyusb
-brew install libusb 
+* misc research / notes
 
 MIDI stuff:
 virtual keyboard for generating events: https://flit.github.io/projects/midikeys/
 monitoring MIDI events on the system: https://www.snoize.com/MIDIMonitor/
 
-* misc research / notes
 https://jan.rychter.com/fingerworks-touchstream-kbd
 
 https://bill.harding.blog/tag/touchpad/
