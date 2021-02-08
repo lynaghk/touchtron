@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name 0_touchtron)(type Legacy)(uri ${KIPRJMOD}/0_touchtron.lib)(options "")(descr ""))
+)

@@ -1,0 +1,18 @@
+(module usb_a_edge_connector (layer F.Cu) (tedit 5ECA4AFF)
+  (fp_text reference REF** (at 6.3 -11.6) (layer F.SilkS) hide
+    (effects (font (size 1 1) (thickness 0.15)))
+  )
+  (fp_text value usb_a_edge_connector (at 6.6 -13.9) (layer F.Fab)
+    (effects (font (size 1 1) (thickness 0.15)))
+  )
+  (fp_line (start 0 0) (end 0 -12) (layer Edge.Cuts) (width 0.05))
+  (fp_line (start 12 0) (end 0 0) (layer Edge.Cuts) (width 0.05))
+  (fp_line (start 12 0) (end 12 -12) (layer Edge.Cuts) (width 0.05))
+  (fp_text user J2 (at 6.16 -7.85) (layer F.SilkS) hide
+    (effects (font (size 1.5 1.5) (thickness 0.15)))
+  )
+  (pad 2 connect rect (at 7.33 -5.15) (size 2 7.5) (layers F.Cu F.Mask))
+  (pad 3 connect rect (at 4.73 -5.15) (size 2 7.5) (layers F.Cu F.Mask))
+  (pad 4 connect rect (at 2.22 -4.9) (size 1.9 8) (layers F.Cu F.Mask))
+  (pad 1 connect rect (at 9.84 -4.9) (size 1.9 8) (layers F.Cu F.Mask))
+)
